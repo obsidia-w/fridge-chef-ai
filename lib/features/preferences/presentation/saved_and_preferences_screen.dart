@@ -7,7 +7,7 @@ import '../../recipe_detail/presentation/recipe_detail_screen.dart';
 import '../../recommendation/domain/recipe.dart';
 import '../domain/user_preferences.dart';
 
-/// 저장한 레시피 보관함 화면
+/// 저장한 레시피 보관함 화면 (JavaGem Coffee Shop & Food Delivery 레퍼런스 + baseline-ui 적용)
 /// - 피드백 반영:
 ///   1. 조리시간, 난이도, 인분 수 설정 제거
 ///   2. 알레르기 필터는 메인 화면에서 숨기고 우측 상단 ⚙️ 설정창(모달)을 눌렀을 때만 열리도록 분리
@@ -42,12 +42,19 @@ class SavedAndPreferencesScreen extends ConsumerWidget {
         actions: [
           TextButton.icon(
             key: const Key('open_settings_modal_button'),
+            style: TextButton.styleFrom(
+              foregroundColor: AppTheme.terracottaDark,
+            ),
             onPressed: () => _openAllergySettingsModal(context),
             icon: const Icon(Icons.settings_outlined, size: 18),
             label: Text(
               appState.preferences.allergens.isEmpty
                   ? '알레르기 설정'
                   : '알레르기 설정 (${appState.preferences.allergens.length})',
+              style: const TextStyle(
+                fontWeight: FontWeight.w700,
+                fontFeatures: AppTheme.tabularFigures,
+              ),
             ),
           ),
           const SizedBox(width: 8),
@@ -72,7 +79,7 @@ class SavedAndPreferencesScreen extends ConsumerWidget {
   Widget _buildRecipeSourceGuideCard() {
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(18),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -80,13 +87,13 @@ class SavedAndPreferencesScreen extends ConsumerWidget {
               children: [
                 Icon(
                   Icons.public_outlined,
-                  color: AppTheme.primaryGreenDark,
+                  color: AppTheme.terracottaDark,
                   size: 20,
                 ),
                 SizedBox(width: 8),
                 Text(
                   '카테고리별 글로벌 레시피 출처 안내',
-                  style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w700),
+                  style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w800),
                 ),
               ],
             ),
@@ -95,7 +102,7 @@ class SavedAndPreferencesScreen extends ConsumerWidget {
                 .where((c) => c != CuisineCategory.all)
                 .map((c) {
               return Padding(
-                padding: const EdgeInsets.only(bottom: 4),
+                padding: const EdgeInsets.only(bottom: 5),
                 child: Text(
                   '• ${c.emoji} ${c.label}: ${c.primarySourceSite}',
                   style: const TextStyle(
@@ -121,23 +128,40 @@ class SavedAndPreferencesScreen extends ConsumerWidget {
       children: [
         Text(
           '저장한 레시피 (${bookmarkedRecipes.length})',
-          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+          style: const TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w800,
+            fontFeatures: AppTheme.tabularFigures,
+          ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 10),
         if (bookmarkedRecipes.isEmpty)
-          const Card(
+          Card(
             child: Padding(
-              padding: EdgeInsets.all(20),
+              padding: const EdgeInsets.all(20),
               child: Row(
                 children: [
-                  Icon(Icons.bookmark_border, color: AppTheme.textMuted),
-                  SizedBox(width: 12),
-                  Expanded(
+                  Container(
+                    width: 44,
+                    height: 44,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: AppTheme.terracottaLight,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: const Icon(
+                      Icons.bookmark_border,
+                      color: AppTheme.terracottaDark,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  const Expanded(
                     child: Text(
                       '아직 저장한 레시피가 없습니다. 마음에 드는 요리 상세 화면에서 북마크 아이콘을 눌러 저장해 보세요 (오프라인에서도 열람 가능).',
                       style: TextStyle(
                         fontSize: 13,
                         color: AppTheme.textSecondary,
+                        height: 1.4,
                       ),
                     ),
                   ),
@@ -166,16 +190,30 @@ class SavedAndPreferencesScreen extends ConsumerWidget {
             return Card(
               margin: const EdgeInsets.only(bottom: 10),
               child: ListTile(
-                leading: Text(
-                  recipe.emoji,
-                  style: const TextStyle(fontSize: 26),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                leading: Container(
+                  width: 48,
+                  height: 48,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: AppTheme.terracottaLight,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Text(
+                    recipe.emoji,
+                    style: const TextStyle(fontSize: 24),
+                  ),
                 ),
                 title: Text(
                   recipe.title,
-                  style: const TextStyle(fontWeight: FontWeight.w700),
+                  style: const TextStyle(fontWeight: FontWeight.w800),
                 ),
                 subtitle: Text(
                   '${recipe.category} · 🔥 ${recipe.nutritionPerServing.caloriesKcal}kcal · ⏱ ${recipe.cookingTimeMinutes}분',
+                  style: const TextStyle(
+                    fontFeatures: AppTheme.tabularFigures,
+                  ),
                 ),
                 trailing: const Icon(Icons.chevron_right_rounded),
                 onTap: () {
@@ -217,6 +255,7 @@ class AllergySettingsBottomSheet extends ConsumerWidget {
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
                 ),
                 IconButton(
+                  tooltip: '닫기',
                   onPressed: () => Navigator.of(context).pop(),
                   icon: const Icon(Icons.close),
                 ),
@@ -258,7 +297,7 @@ class AllergySettingsBottomSheet extends ConsumerWidget {
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: AppTheme.warmWhite,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(14),
                 border: Border.all(color: AppTheme.borderSubtle),
               ),
               child: const Text(
@@ -274,6 +313,10 @@ class AllergySettingsBottomSheet extends ConsumerWidget {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.espressoCharcoal,
+                  foregroundColor: Colors.white,
+                ),
                 onPressed: () => Navigator.of(context).pop(),
                 child: const Text('설정 완료'),
               ),

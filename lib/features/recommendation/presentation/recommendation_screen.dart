@@ -8,11 +8,11 @@ import '../../preferences/presentation/saved_and_preferences_screen.dart';
 import '../../recipe_detail/presentation/recipe_detail_screen.dart';
 import '../domain/recipe.dart';
 
-/// 보유 재료 기반 요리 추천 화면
-/// - 피드백 반영:
-///   1. 요리 카테고리 필터 (전체, 한식, 양식, 일식, 중식, 동남아)
+/// 보유 재료 기반 요리 추천 화면 (Figma Food Delivery & JavaGem Coffee Shop 레퍼런스 적용)
+/// - 피드백 및 UI 스킬 반영:
+///   1. 알약형(Pill) 요리 카테고리 필터 (전체, 한식, 양식, 일식, 중식, 동남아)
 ///   2. 메인 재료(주인공 식재료) 선택 필터 바
-///   3. 칼로리 및 단백질 등 영양소 요약 배지 표시
+///   3. 고정폭 숫자(tabularFigures)가 적용된 칼로리·단백질·조리시간 메타데이터 배지
 ///   4. 알레르기 필터는 상단 설정 아이콘(⚙️) 안으로 숨김
 class RecommendationScreen extends ConsumerStatefulWidget {
   final VoidCallback onOpenScanner;
@@ -87,8 +87,12 @@ class _RecommendationScreenState extends ConsumerState<RecommendationScreen>
             tooltip: '알레르기 필터 설정',
             onPressed: _openAllergySettingsSheet,
             icon: Badge(
+              backgroundColor: AppTheme.dangerRed,
               isLabelVisible: appState.preferences.allergens.isNotEmpty,
-              label: Text('${appState.preferences.allergens.length}'),
+              label: Text(
+                '${appState.preferences.allergens.length}',
+                style: const TextStyle(fontFeatures: AppTheme.tabularFigures),
+              ),
               child: const Icon(Icons.settings_outlined),
             ),
           ),
@@ -96,12 +100,19 @@ class _RecommendationScreenState extends ConsumerState<RecommendationScreen>
         ],
         bottom: TabBar(
           controller: _tabController,
-          labelColor: AppTheme.primaryGreenDark,
+          labelColor: AppTheme.terracottaDark,
           unselectedLabelColor: AppTheme.textSecondary,
-          indicatorColor: AppTheme.primaryGreen,
+          indicatorColor: AppTheme.terracotta,
+          indicatorWeight: 3,
           labelStyle: const TextStyle(
-            fontWeight: FontWeight.w700,
+            fontWeight: FontWeight.w800,
             fontSize: 14,
+            fontFeatures: AppTheme.tabularFigures,
+          ),
+          unselectedLabelStyle: const TextStyle(
+            fontWeight: FontWeight.w600,
+            fontSize: 14,
+            fontFeatures: AppTheme.tabularFigures,
           ),
           tabs: [
             Tab(
@@ -150,7 +161,7 @@ class _RecommendationScreenState extends ConsumerState<RecommendationScreen>
   }) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: const BoxDecoration(
         color: AppTheme.surfaceWhite,
         border: Border(bottom: BorderSide(color: AppTheme.borderSubtle)),
@@ -158,7 +169,7 @@ class _RecommendationScreenState extends ConsumerState<RecommendationScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 1. 요리 카테고리 필터 (전체, 한식, 양식, 일식, 중식, 동남아)
+          // 1. 요리 카테고리 알약형 필터 (Food Delivery & JavaGem 스타일)
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
@@ -168,6 +179,20 @@ class _RecommendationScreenState extends ConsumerState<RecommendationScreen>
                   padding: const EdgeInsets.only(right: 8),
                   child: ChoiceChip(
                     key: Key('cuisine_chip_${category.name}'),
+                    showCheckmark: false,
+                    selectedColor: AppTheme.terracotta,
+                    backgroundColor: AppTheme.warmWhite,
+                    side: BorderSide(
+                      color: isSelected
+                          ? AppTheme.terracotta
+                          : AppTheme.borderSubtle,
+                    ),
+                    labelStyle: TextStyle(
+                      color: isSelected ? Colors.white : AppTheme.textPrimary,
+                      fontWeight:
+                          isSelected ? FontWeight.w800 : FontWeight.w600,
+                      fontSize: 13,
+                    ),
                     label: Text('${category.emoji} ${category.label}'),
                     selected: isSelected,
                     onSelected: (_) {
@@ -187,12 +212,20 @@ class _RecommendationScreenState extends ConsumerState<RecommendationScreen>
               scrollDirection: Axis.horizontal,
               child: Row(
                 children: [
-                  const Text(
-                    '🎯 메인 재료 선택:',
-                    style: TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w700,
-                      color: AppTheme.textSecondary,
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppTheme.espressoCharcoal,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Text(
+                      '🎯 메인 재료',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -231,13 +264,13 @@ class _RecommendationScreenState extends ConsumerState<RecommendationScreen>
             ),
           ],
           if (hasUncertainQty) ...[
-            const SizedBox(height: 6),
+            const SizedBox(height: 8),
             const Text(
               '※ 수량을 입력하지 않은 재료가 포함되어 있어 실제 보유 분량에 따라 조리 가능 여부가 달라질 수 있습니다.',
               style: TextStyle(
                 fontSize: 11.5,
                 color: AppTheme.accentAmberDark,
-                fontWeight: FontWeight.w500,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ],
@@ -258,16 +291,27 @@ class _RecommendationScreenState extends ConsumerState<RecommendationScreen>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(
-                Icons.restaurant_menu_outlined,
-                size: 46,
-                color: AppTheme.textMuted,
+              Container(
+                width: 60,
+                height: 60,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: AppTheme.terracottaLight,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Icon(
+                  Icons.restaurant_menu_outlined,
+                  size: 30,
+                  color: AppTheme.terracottaDark,
+                ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 14),
               Text(
                 emptyTitle,
-                style:
-                    const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                style: const TextStyle(
+                  fontSize: 16.5,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
               const SizedBox(height: 6),
               Text(
@@ -278,8 +322,12 @@ class _RecommendationScreenState extends ConsumerState<RecommendationScreen>
                   color: AppTheme.textSecondary,
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 18),
               ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.terracotta,
+                  foregroundColor: Colors.white,
+                ),
                 onPressed: widget.onOpenScanner,
                 icon: const Icon(Icons.camera_alt_outlined, size: 18),
                 label: const Text('냉장고 재료 스캔하기'),
@@ -300,6 +348,7 @@ class _RecommendationScreenState extends ConsumerState<RecommendationScreen>
     );
   }
 
+  /// Food Delivery UI Kit 스타일의 고밀도 레시피 카드
   Widget _buildRecipeCard(RecommendedRecipe item) {
     final recipe = item.recipe;
     final isNow = item.tier == RecommendationTier.canMakeNow;
@@ -309,7 +358,7 @@ class _RecommendationScreenState extends ConsumerState<RecommendationScreen>
       key: Key('recipe_card_${recipe.id}'),
       margin: const EdgeInsets.only(bottom: 14),
       child: InkWell(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         onTap: () => _openRecipeDetail(item),
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -320,21 +369,26 @@ class _RecommendationScreenState extends ConsumerState<RecommendationScreen>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Container(
-                    width: 52,
-                    height: 52,
+                    width: 60,
+                    height: 60,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
                       color: isNow
                           ? AppTheme.primaryGreenLight
-                          : AppTheme.accentAmberLight,
-                      borderRadius: BorderRadius.circular(14),
+                          : AppTheme.terracottaLight,
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(
+                        color: isNow
+                            ? AppTheme.primaryGreen.withValues(alpha: 0.25)
+                            : AppTheme.terracotta.withValues(alpha: 0.25),
+                      ),
                     ),
                     child: Text(
                       recipe.emoji,
-                      style: const TextStyle(fontSize: 28),
+                      style: const TextStyle(fontSize: 30),
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 14),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -346,14 +400,14 @@ class _RecommendationScreenState extends ConsumerState<RecommendationScreen>
                           children: [
                             Container(
                               padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
+                                horizontal: 9,
                                 vertical: 3,
                               ),
                               decoration: BoxDecoration(
                                 color: isNow
                                     ? AppTheme.primaryGreenLight
                                     : AppTheme.accentAmberLight,
-                                borderRadius: BorderRadius.circular(8),
+                                borderRadius: BorderRadius.circular(999),
                               ),
                               child: Text(
                                 isNow
@@ -361,7 +415,8 @@ class _RecommendationScreenState extends ConsumerState<RecommendationScreen>
                                     : '재료 ${item.missingCoreIngredients.length}개 부족',
                                 style: TextStyle(
                                   fontSize: 11,
-                                  fontWeight: FontWeight.w700,
+                                  fontWeight: FontWeight.w800,
+                                  fontFeatures: AppTheme.tabularFigures,
                                   color: isNow
                                       ? AppTheme.primaryGreenDark
                                       : AppTheme.accentAmberDark,
@@ -370,20 +425,19 @@ class _RecommendationScreenState extends ConsumerState<RecommendationScreen>
                             ),
                             Container(
                               padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
+                                horizontal: 9,
                                 vertical: 3,
                               ),
                               decoration: BoxDecoration(
-                                color: AppTheme.warmWhite,
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: AppTheme.borderSubtle),
+                                color: AppTheme.terracottaLight,
+                                borderRadius: BorderRadius.circular(999),
                               ),
                               child: Text(
                                 recipe.category,
                                 style: const TextStyle(
                                   fontSize: 11,
-                                  fontWeight: FontWeight.w700,
-                                  color: AppTheme.textPrimary,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppTheme.terracottaDark,
                                 ),
                               ),
                             ),
@@ -391,8 +445,9 @@ class _RecommendationScreenState extends ConsumerState<RecommendationScreen>
                               '활용도 ${item.utilizationPercentage}%',
                               style: const TextStyle(
                                 fontSize: 12,
-                                fontWeight: FontWeight.w600,
+                                fontWeight: FontWeight.w700,
                                 color: AppTheme.textSecondary,
+                                fontFeatures: AppTheme.tabularFigures,
                               ),
                             ),
                           ],
@@ -403,23 +458,35 @@ class _RecommendationScreenState extends ConsumerState<RecommendationScreen>
                           style: const TextStyle(
                             fontSize: 17,
                             fontWeight: FontWeight.w800,
+                            letterSpacing: -0.3,
                           ),
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 5),
                         Text(
                           '🔥 ${nutrition.caloriesKcal}kcal · 단백질 ${nutrition.proteinGrams}g · ⏱ ${recipe.cookingTimeMinutes}분',
                           style: const TextStyle(
                             fontSize: 12.5,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w700,
                             color: AppTheme.textSecondary,
+                            fontFeatures: AppTheme.tabularFigures,
                           ),
                         ),
                       ],
                     ),
                   ),
-                  const Icon(
-                    Icons.chevron_right_rounded,
-                    color: AppTheme.textMuted,
+                  Container(
+                    width: 30,
+                    height: 30,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: AppTheme.warmWhite,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.chevron_right_rounded,
+                      size: 20,
+                      color: AppTheme.textSecondary,
+                    ),
                   ),
                 ],
               ),
@@ -436,14 +503,14 @@ class _RecommendationScreenState extends ConsumerState<RecommendationScreen>
                       ),
                       decoration: BoxDecoration(
                         color:
-                            AppTheme.primaryGreenLight.withValues(alpha: 0.6),
+                            AppTheme.primaryGreenLight.withValues(alpha: 0.65),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
                         '✓ $name',
                         style: const TextStyle(
                           fontSize: 11.5,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w700,
                           color: AppTheme.primaryGreenDark,
                         ),
                       ),
@@ -463,7 +530,7 @@ class _RecommendationScreenState extends ConsumerState<RecommendationScreen>
                         '+ 부족: $name',
                         style: const TextStyle(
                           fontSize: 11.5,
-                          fontWeight: FontWeight.w700,
+                          fontWeight: FontWeight.w800,
                           color: AppTheme.accentAmberDark,
                         ),
                       ),
@@ -477,7 +544,7 @@ class _RecommendationScreenState extends ConsumerState<RecommendationScreen>
                 style: const TextStyle(
                   fontSize: 12.5,
                   color: AppTheme.textSecondary,
-                  height: 1.4,
+                  height: 1.42,
                 ),
               ),
             ],

@@ -44,3 +44,15 @@
   5. **칼로리 및 영양소 계산 추가:** 레시피별 1인분 기준 칼로리(`kcal`), 탄수화물(`g`), 단백질(`g`), 지방(`g`), 나트륨(`mg`) 정보를 제공하고, 상세 화면에서 인분 수 변경 시 총 영양소가 실시간 비례 계산되도록 한다.
   6. **메인 재료 선택 추천:** 보유한 식재료 중 특정 재료를 '메인 재료'로 선택하면 해당 재료가 주재료로 들어가는 요리만 필터링·우선 추천한다.
   7. **글로벌 레시피 출처 연동 구조:** 카테고리별 대표 플랫폼(한식: 만개의레시피, 양식/미국: BBC Good Food & Allrecipes, 일식: Cookpad 등) 출처 메타데이터 및 Schema.org(`JSON-LD`) 기반 확장 아키텍처를 채택한다.
+
+## ADR-006: v0.3.0 UI 스킬 스택(`ui-skills`) 및 Figma 레퍼런스 기반 디자인 시스템 고도화
+- **결정 일자:** 2026-11-02
+- **상태:** 승인됨 및 구현 완료 (`DESIGN.md` 문서화 완료)
+- **내용:**
+  1. **Figma Community 레퍼런스 반영:**
+     - [Food Delivery App (Yamesh_SB)](https://www.figma.com/community/file/1231521889522325040/food-delivery-app)의 알약형(Pill) 카테고리/메인 재료 필터, 60×60 라운드 요리 아이콘 컨테이너, 인라인 영양·시간 배지, 다크 차콜 캡슐형 인분 스테퍼(`- 1인분 +`)를 적용한다.
+     - [Coffee Shop Mobile App Design (JavaGem)](https://www.figma.com/community/file/1116708627748807811/coffee-shop-mobile-app-design)의 솔리드 딥 차콜 히어로 대시보드(`#1C1917`), 따뜻한 크림 캔버스(`#F9F6F0`), 테라코타/캐러멜 포인트(`#C67C4E`)와 프레시 허브 그린(`#15803D`) 조합을 적용한다.
+  2. **`ui-skills` (`baseline-ui`, `create-design-md`, `fixing-accessibility`, `fixing-motion-performance`) 규칙 강제:**
+     - 인위적인 다중 색상 선형 그라데이션을 제거하고 솔리드 다크 차콜 카드와 1px 미세 보더(`#EAE4DC`)로 시각 위계를 구성한다.
+     - 모든 동적 수치(칼로리, 영양 성분, 인분, 조리 시간, 활용도 `%`)에 `FontFeature.tabularFigures()` 고정폭 숫자를 적용하여 수치 변경 시 레이아웃 흔들림을 방지한다.
+     - 보유 식재료 삭제 시 실수 방지를 위한 확인 다이얼로그(`AlertDialog`)를 추가하고, 빈 상태(Empty State) 카드에는 단일 Primary CTA만 배치한다.

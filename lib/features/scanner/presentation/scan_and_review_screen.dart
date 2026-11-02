@@ -10,6 +10,7 @@ import '../../pantry/presentation/ingredient_editor_dialog.dart';
 import '../data/ingredient_scanner_service.dart';
 
 /// 카메라 촬영(갤러리 선택 제거), AI 식재료 인식 및 사용자 검수·수정 화면
+/// - JavaGem Coffee Shop & Food Delivery UI 레퍼런스 + baseline-ui 적용
 class ScanAndReviewScreen extends ConsumerStatefulWidget {
   const ScanAndReviewScreen({super.key});
 
@@ -204,10 +205,17 @@ class _ScanAndReviewScreenState extends ConsumerState<ScanAndReviewScreen> {
                     Expanded(
                       child: ElevatedButton.icon(
                         key: const Key('confirm_scan_results_button'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.terracotta,
+                          foregroundColor: Colors.white,
+                        ),
                         onPressed: _saveAndProceedToRecommendations,
                         icon: const Icon(Icons.check_circle_outline),
                         label: Text(
                           '재료 ${_draftIngredients.length}개 확정 및 요리 추천받기',
+                          style: const TextStyle(
+                            fontFeatures: AppTheme.tabularFigures,
+                          ),
                         ),
                       ),
                     ),
@@ -221,12 +229,12 @@ class _ScanAndReviewScreenState extends ConsumerState<ScanAndReviewScreen> {
 
   Widget _buildPrivacyNoticeBanner() {
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppTheme.primaryGreenLight.withValues(alpha: 0.45),
-        borderRadius: BorderRadius.circular(12),
+        color: AppTheme.terracottaLight,
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: AppTheme.primaryGreen.withValues(alpha: 0.3),
+          color: AppTheme.terracotta.withValues(alpha: 0.35),
         ),
       ),
       child: const Row(
@@ -234,7 +242,7 @@ class _ScanAndReviewScreenState extends ConsumerState<ScanAndReviewScreen> {
         children: [
           Icon(
             Icons.verified_user_outlined,
-            color: AppTheme.primaryGreenDark,
+            color: AppTheme.terracottaDark,
             size: 20,
           ),
           SizedBox(width: 10),
@@ -256,13 +264,13 @@ class _ScanAndReviewScreenState extends ConsumerState<ScanAndReviewScreen> {
   Widget _buildCaptureSourceSection() {
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(18),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
               '1. 냉장고 식재료 카메라 촬영',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+              style: TextStyle(fontSize: 16.5, fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 6),
             const Text(
@@ -274,8 +282,15 @@ class _ScanAndReviewScreenState extends ConsumerState<ScanAndReviewScreen> {
               width: double.infinity,
               child: ElevatedButton.icon(
                 key: const Key('scan_camera_button'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.espressoCharcoal,
+                  foregroundColor: Colors.white,
+                ),
                 onPressed: _captureWithCamera,
-                icon: const Icon(Icons.camera_alt_outlined),
+                icon: const Icon(
+                  Icons.camera_alt_outlined,
+                  color: AppTheme.terracotta,
+                ),
                 label: const Text('카메라로 냉장고 촬영하기'),
               ),
             ),
@@ -284,7 +299,7 @@ class _ScanAndReviewScreenState extends ConsumerState<ScanAndReviewScreen> {
               '빠른 시뮬레이션 / 테스트용 냉장고 촬영 샘플',
               style: TextStyle(
                 fontSize: 13,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w700,
                 color: AppTheme.textSecondary,
               ),
             ),
@@ -342,11 +357,11 @@ class _ScanAndReviewScreenState extends ConsumerState<ScanAndReviewScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const CircularProgressIndicator(color: AppTheme.primaryGreen),
+            const CircularProgressIndicator(color: AppTheme.terracotta),
             const SizedBox(height: 20),
             Text(
               '$_selectedSourceDescription 분석 중...',
-              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 8),
             const Text(
@@ -366,7 +381,7 @@ class _ScanAndReviewScreenState extends ConsumerState<ScanAndReviewScreen> {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppTheme.dangerRedLight,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(color: AppTheme.dangerRed.withValues(alpha: 0.4)),
       ),
       child: Column(
@@ -380,7 +395,7 @@ class _ScanAndReviewScreenState extends ConsumerState<ScanAndReviewScreen> {
                 child: Text(
                   'AI 식재료 인식에 실패했어요',
                   style: TextStyle(
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w800,
                     fontSize: 15,
                     color: AppTheme.dangerRed,
                   ),
@@ -429,12 +444,18 @@ class _ScanAndReviewScreenState extends ConsumerState<ScanAndReviewScreen> {
           children: [
             const Text(
               '2. 인식 결과 확인 및 수정',
-              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
             ),
             TextButton.icon(
+              style: TextButton.styleFrom(
+                foregroundColor: AppTheme.terracottaDark,
+              ),
               onPressed: _addManualDraftItem,
               icon: const Icon(Icons.add_circle_outline, size: 18),
-              label: const Text('직접 추가'),
+              label: const Text(
+                '직접 추가',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
             ),
           ],
         ),
@@ -446,6 +467,7 @@ class _ScanAndReviewScreenState extends ConsumerState<ScanAndReviewScreen> {
               style: const TextStyle(
                 fontSize: 13.5,
                 color: AppTheme.textSecondary,
+                fontFeatures: AppTheme.tabularFigures,
               ),
             ),
           ),
@@ -455,8 +477,9 @@ class _ScanAndReviewScreenState extends ConsumerState<ScanAndReviewScreen> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
-                color: Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(10),
+                color: AppTheme.warmWhite,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppTheme.borderSubtle),
               ),
               child: Text(
                 '🧹 자동 제외된 비식품 물체: ${_excludedItems.join(', ')}',
@@ -473,7 +496,7 @@ class _ScanAndReviewScreenState extends ConsumerState<ScanAndReviewScreen> {
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: AppTheme.accentAmberLight,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(14),
               border: Border.all(color: AppTheme.accentAmber),
             ),
             child: Row(
@@ -488,8 +511,9 @@ class _ScanAndReviewScreenState extends ConsumerState<ScanAndReviewScreen> {
                     '확인이 필요한 재료가 ${uncertainItems.length}개 있어요. 맞으면 [맞아요]를 누르거나 이름을 수정해 주세요.',
                     style: const TextStyle(
                       fontSize: 13,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w700,
                       color: AppTheme.accentAmberDark,
+                      fontFeatures: AppTheme.tabularFigures,
                     ),
                   ),
                 ),
@@ -506,7 +530,7 @@ class _ScanAndReviewScreenState extends ConsumerState<ScanAndReviewScreen> {
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
         side: BorderSide(
           color: needsCheck ? AppTheme.accentAmber : AppTheme.borderSubtle,
           width: needsCheck ? 1.5 : 1,
@@ -534,7 +558,7 @@ class _ScanAndReviewScreenState extends ConsumerState<ScanAndReviewScreen> {
                             item.name,
                             style: const TextStyle(
                               fontSize: 16,
-                              fontWeight: FontWeight.w700,
+                              fontWeight: FontWeight.w800,
                             ),
                           ),
                           const SizedBox(width: 8),
@@ -547,13 +571,13 @@ class _ScanAndReviewScreenState extends ConsumerState<ScanAndReviewScreen> {
                               color: needsCheck
                                   ? AppTheme.accentAmberLight
                                   : AppTheme.primaryGreenLight,
-                              borderRadius: BorderRadius.circular(8),
+                              borderRadius: BorderRadius.circular(999),
                             ),
                             child: Text(
                               needsCheck ? '⚠️ 확인 필요' : '✓ 인식 확실',
                               style: TextStyle(
                                 fontSize: 11,
-                                fontWeight: FontWeight.w700,
+                                fontWeight: FontWeight.w800,
                                 color: needsCheck
                                     ? AppTheme.accentAmberDark
                                     : AppTheme.primaryGreenDark,
@@ -568,6 +592,7 @@ class _ScanAndReviewScreenState extends ConsumerState<ScanAndReviewScreen> {
                         style: const TextStyle(
                           fontSize: 12.5,
                           color: AppTheme.textSecondary,
+                          fontFeatures: AppTheme.tabularFigures,
                         ),
                       ),
                     ],

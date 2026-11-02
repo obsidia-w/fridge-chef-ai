@@ -74,45 +74,55 @@ class _MainShellScreenState extends State<MainShellScreen> {
       floatingActionButton: _selectedIndex == 0
           ? FloatingActionButton.extended(
               key: const Key('fab_scan_fridge'),
-              backgroundColor: AppTheme.primaryGreen,
+              backgroundColor: AppTheme.espressoCharcoal,
               foregroundColor: Colors.white,
+              elevation: 2,
               onPressed: _openScannerFlow,
-              icon: const Icon(Icons.camera_alt_rounded),
+              icon: const Icon(
+                Icons.camera_alt_rounded,
+                color: AppTheme.terracotta,
+              ),
               label: const Text(
                 '냉장고 스캔',
-                style: TextStyle(fontWeight: FontWeight.w700),
+                style: TextStyle(fontWeight: FontWeight.w800),
               ),
             )
           : null,
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _selectedIndex,
-        onDestinationSelected: (index) {
-          setState(() => _selectedIndex = index);
-        },
-        destinations: const [
-          NavigationDestination(
-            key: Key('nav_pantry'),
-            icon: Icon(Icons.kitchen_outlined),
-            selectedIcon: Icon(Icons.kitchen, color: AppTheme.primaryGreenDark),
-            label: '내 냉장고',
-          ),
-          NavigationDestination(
-            key: Key('nav_recommendations'),
-            icon: Icon(Icons.restaurant_menu_outlined),
-            selectedIcon: Icon(
-              Icons.restaurant_menu,
-              color: AppTheme.primaryGreenDark,
+      bottomNavigationBar: Container(
+        decoration: const BoxDecoration(
+          border: Border(top: BorderSide(color: AppTheme.borderSubtle)),
+        ),
+        child: NavigationBar(
+          selectedIndex: _selectedIndex,
+          onDestinationSelected: (index) {
+            setState(() => _selectedIndex = index);
+          },
+          destinations: const [
+            NavigationDestination(
+              key: Key('nav_pantry'),
+              icon: Icon(Icons.kitchen_outlined),
+              selectedIcon:
+                  Icon(Icons.kitchen, color: AppTheme.terracottaDark),
+              label: '내 냉장고',
             ),
-            label: '맞춤 요리 추천',
-          ),
-          NavigationDestination(
-            key: Key('nav_saved_prefs'),
-            icon: Icon(Icons.bookmark_outline),
-            selectedIcon:
-                Icon(Icons.bookmark, color: AppTheme.primaryGreenDark),
-            label: '저장 & 설정',
-          ),
-        ],
+            NavigationDestination(
+              key: Key('nav_recommendations'),
+              icon: Icon(Icons.restaurant_menu_outlined),
+              selectedIcon: Icon(
+                Icons.restaurant_menu,
+                color: AppTheme.terracottaDark,
+              ),
+              label: '맞춤 요리 추천',
+            ),
+            NavigationDestination(
+              key: Key('nav_saved_prefs'),
+              icon: Icon(Icons.bookmark_outline),
+              selectedIcon:
+                  Icon(Icons.bookmark, color: AppTheme.terracottaDark),
+              label: '저장 & 설정',
+            ),
+          ],
+        ),
       ),
     );
   }
