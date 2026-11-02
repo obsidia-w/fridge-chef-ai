@@ -10,11 +10,13 @@ import '../../features/recommendation/domain/recipe.dart';
 import '../../features/recommendation/domain/recipe_recommendation_engine.dart';
 import '../../features/scanner/data/ingredient_scanner_service.dart';
 
-/// 로컬 저장소 및 전체 앱 상태(내 냉장고 재료, 기본 양념, 개인화 설정, 저장한 레시피) 통합 모델
+/// 로컬 저장소 및 전체 앱 상태(내 냉장고 재료, 기본 양념, 알레르기 설정, 카테고리/메인 재료 필터, 저장한 레시피) 통합 모델
 class AppDataState {
   final List<Ingredient> pantryIngredients;
   final Set<String> ownedSeasonings;
   final UserPreferences preferences;
+  final CuisineCategory selectedCategory;
+  final String? selectedMainIngredient;
   final Set<String> bookmarkedRecipeIds;
   final bool isInitialized;
 
@@ -22,6 +24,8 @@ class AppDataState {
     required this.pantryIngredients,
     required this.ownedSeasonings,
     required this.preferences,
+    this.selectedCategory = CuisineCategory.all,
+    this.selectedMainIngredient,
     required this.bookmarkedRecipeIds,
     this.isInitialized = false,
   });
@@ -69,6 +73,8 @@ class AppDataState {
         '후추',
       },
       preferences: const UserPreferences(),
+      selectedCategory: CuisineCategory.all,
+      selectedMainIngredient: null,
       bookmarkedRecipeIds: const {},
       isInitialized: false,
     );
@@ -78,6 +84,9 @@ class AppDataState {
     List<Ingredient>? pantryIngredients,
     Set<String>? ownedSeasonings,
     UserPreferences? preferences,
+    CuisineCategory? selectedCategory,
+    String? selectedMainIngredient,
+    bool clearMainIngredient = false,
     Set<String>? bookmarkedRecipeIds,
     bool? isInitialized,
   }) {
@@ -85,6 +94,10 @@ class AppDataState {
       pantryIngredients: pantryIngredients ?? this.pantryIngredients,
       ownedSeasonings: ownedSeasonings ?? this.ownedSeasonings,
       preferences: preferences ?? this.preferences,
+      selectedCategory: selectedCategory ?? this.selectedCategory,
+      selectedMainIngredient: clearMainIngredient
+          ? null
+          : (selectedMainIngredient ?? this.selectedMainIngredient),
       bookmarkedRecipeIds: bookmarkedRecipeIds ?? this.bookmarkedRecipeIds,
       isInitialized: isInitialized ?? this.isInitialized,
     );
@@ -229,16 +242,26 @@ class AppStateNotifier extends Notifier<AppDataState> {
 
   /// 식재료 삭제
   void removeIngredient(String id) {
+    final removedItem =
+        state.pantryIngredients.where((e) => e.id == id).firstOrNull;
+    final nextList =
+        state.pantryIngredients.where((e) => e.id != id).toList();
+    final shouldClearMain = removedItem != null &&
+        state.selectedMainIngredient == removedItem.name;
+
     state = state.copyWith(
-      pantryIngredients:
-          state.pantryIngredients.where((e) => e.id != id).toList(),
+      pantryIngredients: nextList,
+      clearMainIngredient: shouldClearMain,
     );
     _saveToStorage();
   }
 
   /// 전체 식재료 비우기
   void clearPantry() {
-    state = state.copyWith(pantryIngredients: const []);
+    state = state.copyWith(
+      pantryIngredients: const [],
+      clearMainIngredient: true,
+    );
     _saveToStorage();
   }
 
@@ -254,7 +277,22 @@ class AppStateNotifier extends Notifier<AppDataState> {
     _saveToStorage();
   }
 
-  /// 개인화 설정 업데이트
+  /// 요리 카테고리 선택 (전체, 한식, 양식, 일식, 중식, 동남아)
+  void selectCategory(CuisineCategory category) {
+    state = state.copyWith(selectedCategory: category);
+  }
+
+  /// 메인 식재료 선택 또는 해제 (해당 재료를 주인공으로 하는 레시피 추천)
+  void selectMainIngredient(String? ingredientName) {
+    if (ingredientName == null ||
+        state.selectedMainIngredient == ingredientName) {
+      state = state.copyWith(clearMainIngredient: true);
+    } else {
+      state = state.copyWith(selectedMainIngredient: ingredientName);
+    }
+  }
+
+  /// 알레르기 개인화 설정 업데이트
   void updatePreferences(UserPreferences newPreferences) {
     state = state.copyWith(preferences: newPreferences);
     _saveToStorage();
@@ -295,5 +333,7 @@ final recommendedRecipesProvider = Provider<List<RecommendedRecipe>>((ref) {
     ownedSeasonings: appState.ownedSeasonings,
     preferences: appState.preferences,
     allRecipes: allRecipes,
+    selectedCategory: appState.selectedCategory,
+    selectedMainIngredient: appState.selectedMainIngredient,
   );
 });

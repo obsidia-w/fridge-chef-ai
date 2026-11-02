@@ -7,7 +7,7 @@ import '../../../core/utils/ingredient_normalizer.dart';
 import '../domain/ingredient.dart';
 import 'ingredient_editor_dialog.dart';
 
-/// 홈 / 내 냉장고 식재료 및 기본 양념 관리 화면
+/// 홈 / 내 냉장고 식재료, 메인 재료 지정 및 기본 양념 관리 화면
 class PantryScreen extends ConsumerStatefulWidget {
   final VoidCallback onStartScan;
   final VoidCallback onGoToRecommendations;
@@ -35,13 +35,20 @@ class _PantryScreenState extends ConsumerState<PantryScreen> {
     }
   }
 
+  void _selectAsMainAndGoToRecommendations(String ingredientName) {
+    final currentMain = ref.read(appStateProvider).selectedMainIngredient;
+    if (currentMain != ingredientName) {
+      ref.read(appStateProvider.notifier).selectMainIngredient(ingredientName);
+    }
+    widget.onGoToRecommendations();
+  }
+
   @override
   Widget build(BuildContext context) {
     final appState = ref.watch(appStateProvider);
     final recommendations = ref.watch(recommendedRecipesProvider);
-    final canMakeNowCount = recommendations
-        .where((r) => r.tier.name == 'canMakeNow')
-        .length;
+    final canMakeNowCount =
+        recommendations.where((r) => r.tier.name == 'canMakeNow').length;
 
     final filteredIngredients = _selectedFilterCategory == null
         ? appState.pantryIngredients
@@ -75,13 +82,23 @@ class _PantryScreenState extends ConsumerState<PantryScreen> {
           ),
           const SizedBox(height: 22),
           _buildPantrySectionHeader(appState.pantryIngredients.length),
+          const SizedBox(height: 6),
+          const Text(
+            '💡 식재료의 [🎯 메인 요리 추천] 버튼을 누르면 해당 재료를 주인공으로 하는 레시피만 바로 모아볼 수 있어요.',
+            style: TextStyle(fontSize: 12.5, color: AppTheme.textSecondary),
+          ),
           const SizedBox(height: 10),
           _buildCategoryFilterChips(appState.pantryIngredients),
           const SizedBox(height: 12),
           if (filteredIngredients.isEmpty)
             _buildEmptyPantryCard()
           else
-            ...filteredIngredients.map(_buildIngredientCard),
+            ...filteredIngredients.map(
+              (item) => _buildIngredientCard(
+                item,
+                isMainSelected: appState.selectedMainIngredient == item.name,
+              ),
+            ),
           const SizedBox(height: 24),
           _buildSeasoningRackSection(appState.ownedSeasonings),
           const SizedBox(height: 32),
@@ -124,7 +141,7 @@ class _PantryScreenState extends ConsumerState<PantryScreen> {
           ),
           const SizedBox(height: 12),
           const Text(
-            '사진 한 장으로 냉장고 재료를\n채우고 오늘 요리를 추천받으세요!',
+            '카메라로 냉장고 재료를 촬영하고\n오늘의 맞춤 요리를 추천받으세요!',
             style: TextStyle(
               color: Colors.white,
               fontSize: 20,
@@ -145,7 +162,7 @@ class _PantryScreenState extends ConsumerState<PantryScreen> {
                   ),
                   onPressed: widget.onStartScan,
                   icon: const Icon(Icons.camera_alt_rounded),
-                  label: const Text('사진으로 재료 인식'),
+                  label: const Text('카메라로 재료 인식'),
                 ),
               ),
               const SizedBox(width: 10),
@@ -242,7 +259,7 @@ class _PantryScreenState extends ConsumerState<PantryScreen> {
             ),
             const SizedBox(height: 6),
             const Text(
-              '냉장고 사진을 촬영하거나 재료를 직접 추가해 보세요.',
+              '카메라로 냉장고를 촬영하거나 재료를 직접 추가해 보세요.',
               style: TextStyle(fontSize: 13.5, color: AppTheme.textSecondary),
             ),
             const SizedBox(height: 16),
@@ -252,7 +269,7 @@ class _PantryScreenState extends ConsumerState<PantryScreen> {
                 ElevatedButton.icon(
                   onPressed: widget.onStartScan,
                   icon: const Icon(Icons.camera_alt_outlined, size: 18),
-                  label: const Text('사진 촬영/선택'),
+                  label: const Text('카메라 촬영'),
                 ),
                 OutlinedButton.icon(
                   onPressed: () => _showAddOrEditDialog(),
@@ -267,11 +284,21 @@ class _PantryScreenState extends ConsumerState<PantryScreen> {
     );
   }
 
-  Widget _buildIngredientCard(Ingredient item) {
+  Widget _buildIngredientCard(
+    Ingredient item, {
+    required bool isMainSelected,
+  }) {
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(
+          color: isMainSelected ? AppTheme.primaryGreen : AppTheme.borderSubtle,
+          width: isMainSelected ? 1.5 : 1,
+        ),
+      ),
       child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
         leading: CircleAvatar(
           backgroundColor: AppTheme.primaryGreenLight,
           child: Text(
@@ -279,9 +306,33 @@ class _PantryScreenState extends ConsumerState<PantryScreen> {
             style: const TextStyle(fontSize: 20),
           ),
         ),
-        title: Text(
-          item.name,
-          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15.5),
+        title: Row(
+          children: [
+            Text(
+              item.name,
+              style:
+                  const TextStyle(fontWeight: FontWeight.w700, fontSize: 15.5),
+            ),
+            if (isMainSelected) ...[
+              const SizedBox(width: 6),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AppTheme.primaryGreenLight,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Text(
+                  '🎯 메인 선택됨',
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.primaryGreenDark,
+                  ),
+                ),
+              ),
+            ],
+          ],
         ),
         subtitle: Text(
           '${item.category.label} · ${item.quantityDisplay}',
@@ -290,6 +341,14 @@ class _PantryScreenState extends ConsumerState<PantryScreen> {
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
+            TextButton(
+              key: Key('select_main_from_pantry_${item.name}'),
+              onPressed: () => _selectAsMainAndGoToRecommendations(item.name),
+              child: const Text(
+                '🎯 메인 추천',
+                style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
+              ),
+            ),
             IconButton(
               key: Key('edit_ingredient_${item.name}'),
               tooltip: '재료 수정',

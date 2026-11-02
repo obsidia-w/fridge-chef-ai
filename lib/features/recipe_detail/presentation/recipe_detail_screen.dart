@@ -6,7 +6,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/ingredient_normalizer.dart';
 import '../../recommendation/domain/recipe.dart';
 
-/// 레시피 상세 화면 (인분 조절, 필요 재료 체크, 단계별 조리 방법, 식품 안전 주의사항, 대체안, 북마크)
+/// 레시피 상세 화면 (인분 조절, 칼로리/영양소 실시간 계산, 필요 재료 체크, 단계별 조리 방법, 식품 안전 주의사항, 출처 플랫폼 표시)
 class RecipeDetailScreen extends ConsumerStatefulWidget {
   final RecommendedRecipe recommendedRecipe;
 
@@ -25,11 +25,7 @@ class _RecipeDetailScreenState extends ConsumerState<RecipeDetailScreen> {
   @override
   void initState() {
     super.initState();
-    final defaultServings =
-        ref.read(appStateProvider).preferences.defaultServings;
-    _currentServings = defaultServings > 0
-        ? defaultServings
-        : widget.recommendedRecipe.recipe.baseServings;
+    _currentServings = widget.recommendedRecipe.recipe.baseServings;
   }
 
   void _changeServings(int delta) {
@@ -71,6 +67,8 @@ class _RecipeDetailScreenState extends ConsumerState<RecipeDetailScreen> {
         padding: const EdgeInsets.all(16),
         children: [
           _buildHeaderCard(recipe),
+          const SizedBox(height: 16),
+          _buildNutritionSummaryCard(recipe),
           if (widget.recommendedRecipe.hasUncertainQuantities) ...[
             const SizedBox(height: 12),
             _buildUncertainQuantityNotice(),
@@ -108,27 +106,52 @@ class _RecipeDetailScreenState extends ConsumerState<RecipeDetailScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: isNow
-                              ? AppTheme.primaryGreenLight
-                              : AppTheme.accentAmberLight,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          widget.recommendedRecipe.tier.label,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: isNow
-                                ? AppTheme.primaryGreenDark
-                                : AppTheme.accentAmberDark,
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: isNow
+                                  ? AppTheme.primaryGreenLight
+                                  : AppTheme.accentAmberLight,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              widget.recommendedRecipe.tier.label,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: isNow
+                                    ? AppTheme.primaryGreenDark
+                                    : AppTheme.accentAmberDark,
+                              ),
+                            ),
                           ),
-                        ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppTheme.warmWhite,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: AppTheme.borderSubtle),
+                            ),
+                            child: Text(
+                              recipe.category,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: AppTheme.textPrimary,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 6),
                       Text(
@@ -161,8 +184,8 @@ class _RecipeDetailScreenState extends ConsumerState<RecipeDetailScreen> {
                   '예상 ${recipe.cookingTimeMinutes}분',
                 ),
                 _buildInfoBadge(
-                  Icons.bar_chart_rounded,
-                  '난이도 ${recipe.difficulty.label}',
+                  Icons.local_fire_department_outlined,
+                  '1인분 ${recipe.nutritionPerServing.caloriesKcal}kcal',
                 ),
                 _buildInfoBadge(
                   Icons.kitchen_outlined,
@@ -189,6 +212,135 @@ class _RecipeDetailScreenState extends ConsumerState<RecipeDetailScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  /// 칼로리 및 탄수화물·단백질·지방·나트륨 계산 카드
+  Widget _buildNutritionSummaryCard(Recipe recipe) {
+    final perServing = recipe.nutritionPerServing;
+    final totalScaled = perServing.scaleForServings(_currentServings);
+
+    return Card(
+      key: const Key('nutrition_summary_card'),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.analytics_outlined,
+                      color: AppTheme.primaryGreenDark,
+                      size: 20,
+                    ),
+                    SizedBox(width: 8),
+                    Text(
+                      '칼로리 및 영양 성분 계산',
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                    ),
+                  ],
+                ),
+                Text(
+                  '$_currentServings인분 기준 (1인분 ${perServing.caloriesKcal}kcal)',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildMacroTile(
+                    label: '총 열량',
+                    value: '${totalScaled.caloriesKcal}kcal',
+                    highlight: true,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _buildMacroTile(
+                    label: '탄수화물',
+                    value: '${totalScaled.carbsGrams}g',
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _buildMacroTile(
+                    label: '단백질',
+                    value: '${totalScaled.proteinGrams}g',
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _buildMacroTile(
+                    label: '지방',
+                    value: '${totalScaled.fatGrams}g',
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '• 예상 나트륨: ${totalScaled.sodiumMg}mg (조리 시 사용하는 양념의 양에 따라 달라질 수 있습니다)',
+              style: const TextStyle(fontSize: 11.5, color: AppTheme.textMuted),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMacroTile({
+    required String label,
+    required String value,
+    bool highlight = false,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
+      decoration: BoxDecoration(
+        color: highlight ? AppTheme.primaryGreenLight : AppTheme.warmWhite,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: highlight ? AppTheme.primaryGreen : AppTheme.borderSubtle,
+        ),
+      ),
+      child: Column(
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w600,
+              color: highlight
+                  ? AppTheme.primaryGreenDark
+                  : AppTheme.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w800,
+              color:
+                  highlight ? AppTheme.primaryGreenDark : AppTheme.textPrimary,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -275,8 +427,9 @@ class _RecipeDetailScreenState extends ConsumerState<RecipeDetailScreen> {
                       IconButton(
                         key: const Key('servings_decrease_button'),
                         visualDensity: VisualDensity.compact,
-                        onPressed:
-                            _currentServings > 1 ? () => _changeServings(-1) : null,
+                        onPressed: _currentServings > 1
+                            ? () => _changeServings(-1)
+                            : null,
                         icon: const Icon(Icons.remove, size: 18),
                       ),
                       Padding(
@@ -502,11 +655,30 @@ class _RecipeDetailScreenState extends ConsumerState<RecipeDetailScreen> {
   }
 
   Widget _buildSourceFooter(Recipe recipe) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4),
-      child: Text(
-        '출처: ${recipe.sourceName} · 알레르기 유발 성분은 조리 전 제품 원재료명을 반드시 직접 확인하세요.',
-        style: const TextStyle(fontSize: 12, color: AppTheme.textMuted),
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceWhite,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.borderSubtle),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '📚 레시피 출처 기준: ${recipe.sourceName}${recipe.sourceUrl != null ? ' (${recipe.sourceUrl})' : ''}',
+            style: const TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w600,
+              color: AppTheme.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            '• 알레르기 유발 성분은 조리 전 실제 제품의 원재료명을 반드시 직접 확인하세요.',
+            style: TextStyle(fontSize: 11.5, color: AppTheme.textMuted),
+          ),
+        ],
       ),
     );
   }

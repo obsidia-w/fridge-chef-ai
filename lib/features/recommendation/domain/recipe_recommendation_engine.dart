@@ -3,10 +3,7 @@ import '../../pantry/domain/ingredient.dart';
 import '../../preferences/domain/user_preferences.dart';
 import '../domain/recipe.dart';
 
-/// 식재료 매칭과 조리 가능성 판정을 명확한 규칙으로 수행하는 추천 엔진
-/// - 알레르기 및 기피 식재료는 100% 엄격하게 필터링합니다.
-/// - 보유 재료 + 보유 기본 양념으로 100% 가능한 요리와 1~2개 부족한 요리를 명확히 분리합니다.
-/// - 보유 식재료의 수량이 입력되지 않은 경우 조리 가능 여부 불확실 플래그를 표시합니다.
+/// 식재료 매칭, 카테고리 필터링, 메인 재료 우선 추천 및 알레르기 안전 필터링을 수행하는 추천 엔진
 class RecipeRecommendationEngine {
   const RecipeRecommendationEngine();
 
@@ -15,6 +12,8 @@ class RecipeRecommendationEngine {
     required Set<String> ownedSeasonings,
     required UserPreferences preferences,
     required List<Recipe> allRecipes,
+    CuisineCategory selectedCategory = CuisineCategory.all,
+    String? selectedMainIngredient,
   }) {
     // 1. 보유 재료 정규화 맵 구성 (이름 -> Ingredient)
     final Map<String, Ingredient> ownedMap = {};
@@ -27,10 +26,21 @@ class RecipeRecommendationEngine {
         .map(IngredientNormalizer.normalizeName)
         .toSet();
 
+    final normalizedMainTarget = selectedMainIngredient != null &&
+            selectedMainIngredient.trim().isNotEmpty
+        ? IngredientNormalizer.normalizeName(selectedMainIngredient)
+        : null;
+
     final List<RecommendedRecipe> results = [];
 
     for (final recipe in allRecipes) {
-      // 2. 알레르기 및 기피 식재료 엄격 필터링 (레시피의 모든 재료 검사)
+      // 2. 요리 카테고리 필터 (한식, 양식, 일식, 중식, 동남아)
+      if (selectedCategory != CuisineCategory.all &&
+          recipe.category != selectedCategory.label) {
+        continue;
+      }
+
+      // 3. 알레르기 및 기피 식재료 엄격 필터링 (레시피의 모든 재료 검사)
       final hasAllergenOrDisliked = recipe.ingredients.any(
         (req) => preferences.isRestrictedIngredient(req.name),
       );
@@ -38,14 +48,25 @@ class RecipeRecommendationEngine {
         continue;
       }
 
-      // 3. 최대 조리 시간 필터링
-      if (recipe.cookingTimeMinutes > preferences.maxCookingTimeMinutes) {
-        continue;
-      }
-
-      // 4. 난이도 필터링 (선호 난이도 이하만 허용)
-      if (recipe.difficulty.level > preferences.preferredDifficulty.level) {
-        continue;
+      // 4. 메인 재료 필터링 (사용자가 메인 재료를 지정한 경우 해당 재료를 사용하는 요리만 선별)
+      bool usesMainIngredient = false;
+      if (normalizedMainTarget != null) {
+        for (final req in recipe.ingredients) {
+          if (req.isSeasoning) continue;
+          final reqCanonical = IngredientNormalizer.normalizeName(req.name);
+          final matchesDirect = reqCanonical == normalizedMainTarget;
+          final matchesSubstitute = req.substitutes.any(
+            (sub) =>
+                IngredientNormalizer.normalizeName(sub) == normalizedMainTarget,
+          );
+          if (matchesDirect || matchesSubstitute) {
+            usesMainIngredient = true;
+            break;
+          }
+        }
+        if (!usesMainIngredient) {
+          continue;
+        }
       }
 
       final List<String> matched = [];
@@ -63,7 +84,6 @@ class RecipeRecommendationEngine {
           if (hasSeasoning) {
             matched.add(req.name);
           } else {
-            // 대체 양념 확인
             String? foundSub;
             for (final sub in req.substitutes) {
               final subCanonical = IngredientNormalizer.normalizeName(sub);
@@ -135,12 +155,14 @@ class RecipeRecommendationEngine {
             availableSubstitutes: substituteUsed,
             pantryUtilizationRatio: utilizationRatio,
             hasUncertainQuantities: hasUncertainQuantities,
+            usesSelectedMainIngredient: usesMainIngredient,
+            selectedMainIngredientName: normalizedMainTarget,
             recommendationReason: _buildReason(
               recipe: recipe,
               matched: matched,
               missingCore: missingCore,
               substituteUsed: substituteUsed,
-              preferences: preferences,
+              mainIngredient: normalizedMainTarget,
             ),
           ),
         );
@@ -155,22 +177,27 @@ class RecipeRecommendationEngine {
             availableSubstitutes: substituteUsed,
             pantryUtilizationRatio: utilizationRatio,
             hasUncertainQuantities: hasUncertainQuantities,
+            usesSelectedMainIngredient: usesMainIngredient,
+            selectedMainIngredientName: normalizedMainTarget,
             recommendationReason: _buildReason(
               recipe: recipe,
               matched: matched,
               missingCore: missingCore,
               substituteUsed: substituteUsed,
-              preferences: preferences,
+              mainIngredient: normalizedMainTarget,
             ),
           ),
         );
       }
     }
 
-    // 정렬: 1순위 티어(지금 가능 우선), 2순위 활용도 높은 순, 3순위 조리 시간 짧은 순
+    // 정렬: 1순위 티어(지금 가능 우선), 2순위 메인 재료 포함 여부, 3순위 활용도 높은 순
     results.sort((a, b) {
       if (a.tier != b.tier) {
         return a.tier.index.compareTo(b.tier.index);
+      }
+      if (a.usesSelectedMainIngredient != b.usesSelectedMainIngredient) {
+        return a.usesSelectedMainIngredient ? -1 : 1;
       }
       final ratioCmp =
           b.pantryUtilizationRatio.compareTo(a.pantryUtilizationRatio);
@@ -186,17 +213,20 @@ class RecipeRecommendationEngine {
     required List<String> matched,
     required List<String> missingCore,
     required Map<String, String> substituteUsed,
-    required UserPreferences preferences,
+    required String? mainIngredient,
   }) {
     final corePreview = matched.take(3).join(', ');
+    final mainPrefix = mainIngredient != null
+        ? '🎯 선택한 메인 재료 [$mainIngredient] 중심 요리! '
+        : '';
     final subNote = substituteUsed.isNotEmpty
         ? ' (${substituteUsed.entries.map((e) => '${e.key} 대신 ${e.value} 활용').join(', ')})'
         : '';
 
     if (missingCore.isEmpty) {
-      return '보유하신 [$corePreview] 재료로 추가 장보기 없이 ${recipe.cookingTimeMinutes}분 만에 바로 조리할 수 있어요!$subNote';
+      return '$mainPrefix보유하신 [$corePreview] 재료로 추가 장보기 없이 바로 조리할 수 있어요!$subNote';
     } else {
-      return '냉장고 속 [$corePreview] 재료를 활용하고, [${missingCore.join(', ')}]만 추가하면 완성할 수 있어요.$subNote';
+      return '$mainPrefix냉장고 속 [$corePreview] 재료를 활용하고, [${missingCore.join(', ')}]만 추가하면 완성할 수 있어요.$subNote';
     }
   }
 }

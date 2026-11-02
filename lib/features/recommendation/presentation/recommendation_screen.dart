@@ -3,10 +3,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/providers/app_state_provider.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../preferences/domain/user_preferences.dart';
+import '../../preferences/presentation/saved_and_preferences_screen.dart';
 import '../../recipe_detail/presentation/recipe_detail_screen.dart';
 import '../domain/recipe.dart';
 
-/// 보유 재료 기반 요리 추천 화면 ('지금 만들 수 있는 요리' / '조금만 추가하면 가능한 요리' 분리)
+/// 보유 재료 기반 요리 추천 화면
+/// - 피드백 반영:
+///   1. 요리 카테고리 필터 (전체, 한식, 양식, 일식, 중식, 동남아)
+///   2. 메인 재료(주인공 식재료) 선택 필터 바
+///   3. 칼로리 및 단백질 등 영양소 요약 배지 표시
+///   4. 알레르기 필터는 상단 설정 아이콘(⚙️) 안으로 숨김
 class RecommendationScreen extends ConsumerStatefulWidget {
   final VoidCallback onOpenScanner;
 
@@ -44,6 +51,18 @@ class _RecommendationScreenState extends ConsumerState<RecommendationScreen>
     );
   }
 
+  void _openAllergySettingsSheet() {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppTheme.surfaceWhite,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => const AllergySettingsBottomSheet(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final appState = ref.watch(appStateProvider);
@@ -62,6 +81,19 @@ class _RecommendationScreenState extends ConsumerState<RecommendationScreen>
     return Scaffold(
       appBar: AppBar(
         title: const Text('🍳 맞춤 요리 추천'),
+        actions: [
+          IconButton(
+            key: const Key('open_allergy_settings_button'),
+            tooltip: '알레르기 필터 설정',
+            onPressed: _openAllergySettingsSheet,
+            icon: Badge(
+              isLabelVisible: appState.preferences.allergens.isNotEmpty,
+              label: Text('${appState.preferences.allergens.length}'),
+              child: const Icon(Icons.settings_outlined),
+            ),
+          ),
+          const SizedBox(width: 8),
+        ],
         bottom: TabBar(
           controller: _tabController,
           labelColor: AppTheme.primaryGreenDark,
@@ -85,21 +117,24 @@ class _RecommendationScreenState extends ConsumerState<RecommendationScreen>
       ),
       body: Column(
         children: [
-          _buildActiveFilterSummaryBar(appState, hasUncertainQty),
+          _buildCategoryAndMainIngredientFilterSection(
+            appState: appState,
+            hasUncertainQty: hasUncertainQty,
+          ),
           Expanded(
             child: TabBarView(
               controller: _tabController,
               children: [
                 _buildRecipeList(
                   items: canMakeNowList,
-                  emptyTitle: '지금 바로 만들 수 있는 요리가 없어요',
+                  emptyTitle: '조건에 맞는 바로 가능 요리가 없어요',
                   emptySubtitle:
-                      '냉장고 사진을 찍어 식재료를 추가하거나 [조금만 추가] 탭을 확인해 보세요.',
+                      '다른 요리 카테고리나 메인 재료를 선택하거나 [조금만 추가] 탭을 확인해 보세요.',
                 ),
                 _buildRecipeList(
                   items: almostReadyList,
                   emptyTitle: '조금만 추가하면 가능한 요리가 없어요',
-                  emptySubtitle: '식재료를 더 등록하거나 조리 시간/난이도 조건을 넓혀 보세요.',
+                  emptySubtitle: '식재료를 더 등록하거나 다른 요리 카테고리를 선택해 보세요.',
                 ),
               ],
             ),
@@ -109,15 +144,10 @@ class _RecommendationScreenState extends ConsumerState<RecommendationScreen>
     );
   }
 
-  Widget _buildActiveFilterSummaryBar(
-    AppDataState appState,
-    bool hasUncertainQty,
-  ) {
-    final prefs = appState.preferences;
-    final allergenText = prefs.allergens.isEmpty
-        ? '알레르기 필터 없음'
-        : '제외됨: ${prefs.allergens.map((a) => a.label).join(', ')}';
-
+  Widget _buildCategoryAndMainIngredientFilterSection({
+    required AppDataState appState,
+    required bool hasUncertainQty,
+  }) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -128,19 +158,78 @@ class _RecommendationScreenState extends ConsumerState<RecommendationScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Wrap(
-            spacing: 8,
-            runSpacing: 6,
-            children: [
-              _buildFilterChipTag(
-                '⏱ 최대 ${prefs.maxCookingTimeMinutes}분',
-              ),
-              _buildFilterChipTag(
-                '📊 난이도 ${prefs.preferredDifficulty.label} 이하',
-              ),
-              _buildFilterChipTag('🛡 $allergenText'),
-            ],
+          // 1. 요리 카테고리 필터 (전체, 한식, 양식, 일식, 중식, 동남아)
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: CuisineCategory.values.map((category) {
+                final isSelected = appState.selectedCategory == category;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: ChoiceChip(
+                    key: Key('cuisine_chip_${category.name}'),
+                    label: Text('${category.emoji} ${category.label}'),
+                    selected: isSelected,
+                    onSelected: (_) {
+                      ref
+                          .read(appStateProvider.notifier)
+                          .selectCategory(category);
+                    },
+                  ),
+                );
+              }).toList(),
+            ),
           ),
+          // 2. 메인 재료 선택 바 (냉장고에 있는 재료를 주인공으로 하는 레시피 추천)
+          if (appState.pantryIngredients.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  const Text(
+                    '🎯 메인 재료 선택:',
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ChoiceChip(
+                    key: const Key('main_ingredient_all_chip'),
+                    visualDensity: VisualDensity.compact,
+                    label: const Text('전체 재료'),
+                    selected: appState.selectedMainIngredient == null,
+                    onSelected: (_) {
+                      ref
+                          .read(appStateProvider.notifier)
+                          .selectMainIngredient(null);
+                    },
+                  ),
+                  const SizedBox(width: 6),
+                  ...appState.pantryIngredients.map((ing) {
+                    final isSelected =
+                        appState.selectedMainIngredient == ing.name;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: ChoiceChip(
+                        key: Key('main_ingredient_chip_${ing.name}'),
+                        visualDensity: VisualDensity.compact,
+                        label: Text('${ing.category.emoji} ${ing.name}'),
+                        selected: isSelected,
+                        onSelected: (_) {
+                          ref
+                              .read(appStateProvider.notifier)
+                              .selectMainIngredient(ing.name);
+                        },
+                      ),
+                    );
+                  }),
+                ],
+              ),
+            ),
+          ],
           if (hasUncertainQty) ...[
             const SizedBox(height: 6),
             const Text(
@@ -153,25 +242,6 @@ class _RecommendationScreenState extends ConsumerState<RecommendationScreen>
             ),
           ],
         ],
-      ),
-    );
-  }
-
-  Widget _buildFilterChipTag(String label) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: AppTheme.warmWhite,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppTheme.borderSubtle),
-      ),
-      child: Text(
-        label,
-        style: const TextStyle(
-          fontSize: 11.5,
-          color: AppTheme.textSecondary,
-          fontWeight: FontWeight.w600,
-        ),
       ),
     );
   }
@@ -233,6 +303,7 @@ class _RecommendationScreenState extends ConsumerState<RecommendationScreen>
   Widget _buildRecipeCard(RecommendedRecipe item) {
     final recipe = item.recipe;
     final isNow = item.tier == RecommendationTier.canMakeNow;
+    final nutrition = recipe.nutritionPerServing;
 
     return Card(
       key: Key('recipe_card_${recipe.id}'),
@@ -268,7 +339,10 @@ class _RecommendationScreenState extends ConsumerState<RecommendationScreen>
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 4,
+                          crossAxisAlignment: WrapCrossAlignment.center,
                           children: [
                             Container(
                               padding: const EdgeInsets.symmetric(
@@ -294,7 +368,25 @@ class _RecommendationScreenState extends ConsumerState<RecommendationScreen>
                                 ),
                               ),
                             ),
-                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppTheme.warmWhite,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: AppTheme.borderSubtle),
+                              ),
+                              child: Text(
+                                recipe.category,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppTheme.textPrimary,
+                                ),
+                              ),
+                            ),
                             Text(
                               '활용도 ${item.utilizationPercentage}%',
                               style: const TextStyle(
@@ -313,11 +405,12 @@ class _RecommendationScreenState extends ConsumerState<RecommendationScreen>
                             fontWeight: FontWeight.w800,
                           ),
                         ),
-                        const SizedBox(height: 3),
+                        const SizedBox(height: 4),
                         Text(
-                          '⏱ ${recipe.cookingTimeMinutes}분 · 난이도 ${recipe.difficulty.label} · ${recipe.category}',
+                          '🔥 ${nutrition.caloriesKcal}kcal · 단백질 ${nutrition.proteinGrams}g · ⏱ ${recipe.cookingTimeMinutes}분',
                           style: const TextStyle(
                             fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
                             color: AppTheme.textSecondary,
                           ),
                         ),
@@ -342,7 +435,8 @@ class _RecommendationScreenState extends ConsumerState<RecommendationScreen>
                         vertical: 4,
                       ),
                       decoration: BoxDecoration(
-                        color: AppTheme.primaryGreenLight.withValues(alpha: 0.6),
+                        color:
+                            AppTheme.primaryGreenLight.withValues(alpha: 0.6),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(

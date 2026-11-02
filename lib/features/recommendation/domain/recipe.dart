@@ -1,5 +1,34 @@
 import '../../preferences/domain/user_preferences.dart';
 
+/// 1인분 기준 칼로리 및 주요 영양소 정보
+class NutritionInfo {
+  final int caloriesKcal;
+  final double carbsGrams;
+  final double proteinGrams;
+  final double fatGrams;
+  final int sodiumMg;
+
+  const NutritionInfo({
+    required this.caloriesKcal,
+    required this.carbsGrams,
+    required this.proteinGrams,
+    required this.fatGrams,
+    required this.sodiumMg,
+  });
+
+  /// 선택한 인분 수에 맞춘 총 영양소 계산
+  NutritionInfo scaleForServings(int servings) {
+    final factor = servings.clamp(1, 20);
+    return NutritionInfo(
+      caloriesKcal: caloriesKcal * factor,
+      carbsGrams: double.parse((carbsGrams * factor).toStringAsFixed(1)),
+      proteinGrams: double.parse((proteinGrams * factor).toStringAsFixed(1)),
+      fatGrams: double.parse((fatGrams * factor).toStringAsFixed(1)),
+      sodiumMg: sodiumMg * factor,
+    );
+  }
+}
+
 /// 레시피에 필요한 개별 식재료 항목
 class RecipeIngredientRequirement {
   final String name;
@@ -7,6 +36,7 @@ class RecipeIngredientRequirement {
   final String unit;
   final bool isSeasoning;
   final bool isOptional;
+  final bool isMainCandidate;
   final List<String> substitutes;
 
   const RecipeIngredientRequirement({
@@ -15,6 +45,7 @@ class RecipeIngredientRequirement {
     required this.unit,
     this.isSeasoning = false,
     this.isOptional = false,
+    this.isMainCandidate = true,
     this.substitutes = const [],
   });
 
@@ -28,7 +59,6 @@ class RecipeIngredientRequirement {
     if ((scaled - scaled.roundToDouble()).abs() < 0.05) {
       return '${scaled.round()}$unit';
     }
-    // 0.5 단위 표현 정리
     if ((scaled * 2 - (scaled * 2).roundToDouble()).abs() < 0.05) {
       return '${scaled.toStringAsFixed(1)}$unit';
     }
@@ -56,11 +86,12 @@ class Recipe {
   final String id;
   final String title;
   final String subtitle;
-  final String category;
+  final String category; // '한식', '양식', '일식', '중식', '동남아'
   final String emoji;
   final int cookingTimeMinutes;
   final RecipeDifficulty difficulty;
   final int baseServings;
+  final NutritionInfo nutritionPerServing;
   final List<RecipeIngredientRequirement> ingredients;
   final List<CookingStep> steps;
   final List<String> safetyWarnings;
@@ -76,10 +107,11 @@ class Recipe {
     required this.cookingTimeMinutes,
     required this.difficulty,
     this.baseServings = 2,
+    required this.nutritionPerServing,
     required this.ingredients,
     required this.steps,
     this.safetyWarnings = const [],
-    this.sourceName = '냉장고 셰프 검증 레시피 표준 DB',
+    this.sourceName = '만개의레시피 (10000recipe) 표준 가이드',
     this.sourceUrl,
   });
 
@@ -99,7 +131,7 @@ enum RecommendationTier {
   const RecommendationTier(this.label);
 }
 
-/// 추천 결과 모델 (규칙 엔진 판정 결과 + 설명 포함)
+/// 추천 결과 모델 (규칙 엔진 판정 결과 + 메인 재료 일치 여부 + 영양소 포함)
 class RecommendedRecipe {
   final Recipe recipe;
   final RecommendationTier tier;
@@ -109,6 +141,8 @@ class RecommendedRecipe {
   final Map<String, String> availableSubstitutes;
   final double pantryUtilizationRatio;
   final bool hasUncertainQuantities;
+  final bool usesSelectedMainIngredient;
+  final String? selectedMainIngredientName;
   final String recommendationReason;
 
   const RecommendedRecipe({
@@ -120,6 +154,8 @@ class RecommendedRecipe {
     this.availableSubstitutes = const {},
     required this.pantryUtilizationRatio,
     required this.hasUncertainQuantities,
+    this.usesSelectedMainIngredient = false,
+    this.selectedMainIngredientName,
     required this.recommendationReason,
   });
 

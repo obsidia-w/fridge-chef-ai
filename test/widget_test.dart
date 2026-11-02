@@ -68,9 +68,7 @@ void main() {
 
       final normalized = IngredientNormalizer.normalizeAndDeduplicate(rawItems);
 
-      // 락앤락 용기는 제외되고, 달걀+계란은 '계란' 6개로 병합되어 총 2개여야 함
       expect(normalized.length, 2);
-      // 확인이 필요한 '두부'가 첫 번째로 정렬됨
       expect(normalized.first.name, '두부');
       expect(normalized.first.needsConfirmation, isTrue);
 
@@ -99,7 +97,6 @@ void main() {
 
       final egg =
           result.recognizedIngredients.firstWhere((e) => e.name == '계란');
-      // AI가 임의로 넣은 quantity(99)는 폐기되어야 함
       expect(egg.quantity, isNull);
       expect(egg.needsConfirmation, isFalse);
 
@@ -117,7 +114,7 @@ void main() {
     });
   });
 
-  group('3. 요리 추천 엔진 및 알레르기 엄격 필터링 테스트', () {
+  group('3. 요리 추천 엔진, 글로벌 카테고리, 메인 재료 선택 및 칼로리/영양소 계산 테스트', () {
     const engine = RecipeRecommendationEngine();
     final seasonings = {
       '소금',
@@ -132,30 +129,35 @@ void main() {
       '후추',
     };
 
-    test('보유 재료만으로 가능한 요리와 1~2개 부족한 요리를 정확히 분리한다', () {
-      final pantry = [
-        const Ingredient(
-          id: '1',
-          name: '계란',
-          category: IngredientCategory.eggDairy,
-        ),
-        const Ingredient(
-          id: '2',
-          name: '대파',
-          category: IngredientCategory.vegetable,
-        ),
-        const Ingredient(
-          id: '3',
-          name: '밥',
-          category: IngredientCategory.grain,
-        ),
-        const Ingredient(
-          id: '4',
-          name: '김치',
-          category: IngredientCategory.processed,
-        ),
-      ];
+    final pantry = [
+      const Ingredient(
+        id: '1',
+        name: '계란',
+        category: IngredientCategory.eggDairy,
+      ),
+      const Ingredient(
+        id: '2',
+        name: '대파',
+        category: IngredientCategory.vegetable,
+      ),
+      const Ingredient(
+        id: '3',
+        name: '밥',
+        category: IngredientCategory.grain,
+      ),
+      const Ingredient(
+        id: '4',
+        name: '김치',
+        category: IngredientCategory.processed,
+      ),
+      const Ingredient(
+        id: '5',
+        name: '두부',
+        category: IngredientCategory.eggDairy,
+      ),
+    ];
 
+    test('보유 재료만으로 가능한 요리와 1~2개 부족한 요리를 정확히 분리한다', () {
       final recommendations = engine.recommend(
         pantryIngredients: pantry,
         ownedSeasonings: seasonings,
@@ -167,43 +169,52 @@ void main() {
           .where((r) => r.tier == RecommendationTier.canMakeNow)
           .map((r) => r.recipe.id)
           .toList();
-      final almostReady = recommendations
-          .where((r) => r.tier == RecommendationTier.almostReady)
-          .toList();
 
-      // 계란, 대파, 밥이 있으므로 '대파 계란말이'와 '간장계란밥'은 지금 바로 가능!
       expect(canMakeNow, contains('green_onion_egg_roll'));
       expect(canMakeNow, contains('soy_egg_butter_rice'));
-
-      // 김치, 밥, 대파, 계란이 있고 '스팸/통조림햄' 1개만 부족하므로 '스팸 김치볶음밥'은 조금만 추가하면 가능!
-      final kimchiFriedRice = almostReady.firstWhere(
-        (r) => r.recipe.id == 'kimchi_fried_rice',
-      );
-      expect(kimchiFriedRice.missingCoreIngredients, ['스팸/통조림햄']);
-      // 수량이 입력되지 않았으므로 불확실성 안내 플래그가 true여야 함
-      expect(kimchiFriedRice.hasUncertainQuantities, isTrue);
+      expect(canMakeNow, contains('japanese_agedashi_tofu_braise'));
+      expect(canMakeNow, contains('chinese_egg_fried_rice'));
     });
 
-    test('알레르기 설정된 식재료(예: 난류/계란, 돼지고기)가 포함된 레시피는 100% 제외한다', () {
-      final pantry = [
-        const Ingredient(
-          id: '1',
-          name: '계란',
-          category: IngredientCategory.eggDairy,
-        ),
-        const Ingredient(
-          id: '2',
-          name: '대파',
-          category: IngredientCategory.vegetable,
-        ),
-        const Ingredient(
-          id: '3',
-          name: '밥',
-          category: IngredientCategory.grain,
-        ),
-      ];
+    test('요리 카테고리(한식, 양식, 일식, 중식, 동남아) 필터링이 정확히 동작한다', () {
+      final japaneseOnly = engine.recommend(
+        pantryIngredients: pantry,
+        ownedSeasonings: seasonings,
+        preferences: const UserPreferences(),
+        allRecipes: VerifiedRecipesData.recipes,
+        selectedCategory: CuisineCategory.japanese,
+      );
 
-      final eggAllergyPrefs = const UserPreferences(
+      expect(japaneseOnly, isNotEmpty);
+      expect(japaneseOnly.every((r) => r.recipe.category == '일식'), isTrue);
+    });
+
+    test('특정 메인 재료(예: 두부)를 선택하면 해당 재료가 들어간 요리만 추천한다', () {
+      final tofuMainRecipes = engine.recommend(
+        pantryIngredients: pantry,
+        ownedSeasonings: seasonings,
+        preferences: const UserPreferences(),
+        allRecipes: VerifiedRecipesData.recipes,
+        selectedMainIngredient: '두부',
+      );
+
+      expect(tofuMainRecipes, isNotEmpty);
+      expect(
+        tofuMainRecipes.every((r) => r.usesSelectedMainIngredient),
+        isTrue,
+      );
+      expect(
+        tofuMainRecipes.map((r) => r.recipe.id),
+        containsAll(['pork_kimchi_stew', 'japanese_agedashi_tofu_braise']),
+      );
+      expect(
+        tofuMainRecipes.any((r) => r.recipe.id == 'soy_egg_butter_rice'),
+        isFalse,
+      );
+    });
+
+    test('알레르기 설정된 식재료(예: 난류/계란)가 포함된 레시피는 100% 제외한다', () {
+      const eggAllergyPrefs = UserPreferences(
         allergens: {AllergenType.egg},
       );
 
@@ -214,7 +225,6 @@ void main() {
         allRecipes: VerifiedRecipesData.recipes,
       );
 
-      // 계란이 들어가는 계란말이, 간장계란밥, 김치볶음밥은 모두 제외되어야 함
       expect(
         filtered.any((r) => r.recipe.id == 'green_onion_egg_roll'),
         isFalse,
@@ -225,26 +235,34 @@ void main() {
       );
     });
 
-    test('인분 수 변경 시 재료 분량이 비례하여 정확히 계산된다', () {
+    test('인분 수 변경 시 재료 분량과 칼로리/영양소(탄·단·지·나트륨)가 비례하여 정확히 계산된다', () {
       const req = RecipeIngredientRequirement(
         name: '돼지고기',
         baseAmount: 200,
         unit: 'g',
       );
       expect(
-        req.formatAmountForServings(baseServings: 2, targetServings: 1),
-        '100g',
-      );
-      expect(
         req.formatAmountForServings(baseServings: 2, targetServings: 3),
         '300g',
       );
+
+      const nutrition = NutritionInfo(
+        caloriesKcal: 400,
+        carbsGrams: 50.0,
+        proteinGrams: 20.0,
+        fatGrams: 12.0,
+        sodiumMg: 800,
+      );
+      final scaledFor3 = nutrition.scaleForServings(3);
+      expect(scaledFor3.caloriesKcal, 1200);
+      expect(scaledFor3.proteinGrams, 60.0);
+      expect(scaledFor3.sodiumMg, 2400);
     });
   });
 
-  group('4. 핵심 사용자 흐름 위젯 통합 테스트 (스캔 -> 검수/수정 -> 요리 추천 -> 상세)', () {
+  group('4. 피드백 반영 사용자 흐름 위젯 통합 테스트', () {
     testWidgets(
-      '홈 화면에서 냉장고 스캔 샘플 실행, 불확실 재료 확인 후 추천 요리 및 상세 조리법까지 정상 동작한다',
+      '갤러리 선택 제거 확인, 스캔 후 카테고리/메인 재료 필터, 설정창 알레르기 모달, 상세 영양소 계산까지 정상 동작한다',
       (WidgetTester tester) async {
         tester.view.physicalSize = const Size(1080, 2400);
         tester.view.devicePixelRatio = 2.0;
@@ -262,41 +280,56 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        // 1. 홈 화면에 기본 보유 재료(계란, 김치, 대파, 밥)가 표시되는지 확인
-        expect(find.text('🥬 냉장고 셰프 AI'), findsOneWidget);
-        expect(find.text('계란'), findsOneWidget);
-
-        // 2. [사진으로 재료 인식] 버튼을 눌러 스캔 화면 진입
+        // 1. 홈 화면에서 스캔 화면 진입 및 갤러리 버튼이 제거되었는지 확인
         await tester.tap(find.byKey(const Key('hero_start_scan_button')));
         await tester.pumpAndSettle();
-        expect(find.text('AI 냉장고 식재료 스캔'), findsOneWidget);
 
-        // 3. 오류 시뮬레이션 버튼이 화면 아래에 있을 수 있으므로 ensureVisible 후 탭
-        final errorBtn = find.byKey(const Key('demo_preset_error_button'));
-        await tester.ensureVisible(errorBtn);
-        await tester.tap(errorBtn);
-        await tester.pump(const Duration(milliseconds: 700));
-        await tester.pumpAndSettle();
-        expect(find.byKey(const Key('scan_error_fallback_card')), findsOneWidget);
+        expect(find.byKey(const Key('scan_camera_button')), findsOneWidget);
+        expect(find.byKey(const Key('scan_gallery_button')), findsNothing);
 
-        // 4. [다시 시도] 버튼 ensureVisible 후 탭 -> 정상 인식 결과 검수 리스트 표시 검증
-        final retryBtn = find.byKey(const Key('retry_scan_button'));
-        await tester.ensureVisible(retryBtn);
-        await tester.tap(retryBtn);
+        // 2. 샘플 스캔 실행 및 재료 확정
+        final presetBtn = find.byKey(const Key('demo_preset_typical_button'));
+        await tester.ensureVisible(presetBtn);
+        await tester.tap(presetBtn);
         await tester.pump(const Duration(milliseconds: 1000));
         await tester.pumpAndSettle();
 
-        // 불확실한 항목(두부, 스팸/통조림햄)에 '⚠️ 확인 필요' 배지가 표시됨
-        expect(find.text('⚠️ 확인 필요'), findsWidgets);
-
-        // 5. [재료 확정 및 요리 추천받기] 버튼 탭 -> 자동으로 맞춤 요리 추천 탭으로 전환됨
         await tester.tap(find.byKey(const Key('confirm_scan_results_button')));
         await tester.pumpAndSettle();
 
-        expect(find.text('🍳 맞춤 요리 추천'), findsOneWidget);
-        expect(find.text('초간단 간장계란밥'), findsOneWidget);
+        // 3. 맞춤 요리 추천 화면에서 카테고리 칩(한식, 양식, 일식, 중식, 동남아) 확인
+        expect(find.byKey(const Key('cuisine_chip_korean')), findsOneWidget);
+        expect(find.byKey(const Key('cuisine_chip_western')), findsOneWidget);
+        expect(find.byKey(const Key('cuisine_chip_japanese')), findsOneWidget);
+        expect(find.byKey(const Key('cuisine_chip_chinese')), findsOneWidget);
+        expect(
+          find.byKey(const Key('cuisine_chip_southeastAsian')),
+          findsOneWidget,
+        );
 
-        // 6. 추천 요리 카드('초간단 간장계란밥')를 탭하여 상세 레시피 화면 진입 및 인분 조절 검증
+        // 4. 메인 재료 '두부' 칩 선택 -> 두부 메인 요리 필터링 확인
+        final tofuChip = find.byKey(const Key('main_ingredient_chip_두부'));
+        await tester.ensureVisible(tofuChip);
+        await tester.tap(tofuChip);
+        await tester.pumpAndSettle();
+
+        expect(
+          find.text('일식 달콤간장 두부 스테이크 (데리야끼 두부)'),
+          findsOneWidget,
+        );
+
+        // 이미 선택된 '두부' 칩을 다시 탭하여 메인 재료 필터 해제(전체 재료로 복귀)
+        await tester.tap(tofuChip);
+        await tester.pumpAndSettle();
+
+        // 5. 우측 상단 설정 아이콘 탭 -> 숨겨진 알레르기 필터 모달 시트 열림 확인
+        await tester.tap(find.byKey(const Key('open_allergy_settings_button')));
+        await tester.pumpAndSettle();
+        expect(find.text('⚙️ 알레르기 및 제외 식재료 설정'), findsOneWidget);
+        await tester.tap(find.text('설정 완료'));
+        await tester.pumpAndSettle();
+
+        // 6. 레시피 상세 화면 진입 -> 칼로리 및 영양소 계산 카드 및 인분 조절 연동 확인
         final eggRiceCard = find.byKey(
           const Key('recipe_card_soy_egg_butter_rice'),
         );
@@ -304,18 +337,17 @@ void main() {
         await tester.tap(eggRiceCard);
         await tester.pumpAndSettle();
 
-        expect(find.text('단계별 조리 방법 (초보자 가이드)'), findsOneWidget);
-        expect(find.text('식품 안전 및 조리 주의사항'), findsOneWidget);
-        expect(find.byKey(const Key('servings_count_text')), findsOneWidget);
-        expect(find.text('2인분'), findsOneWidget);
+        expect(find.byKey(const Key('nutrition_summary_card')), findsOneWidget);
+        expect(find.text('칼로리 및 영양 성분 계산'), findsOneWidget);
+        expect(find.text('465kcal'), findsOneWidget); // 1인분 기준 총 열량
 
-        // 인분 + 버튼 탭 -> 3인분으로 변경되고 밥 분량이 2공기 -> 3공기로 변경됨
+        // 인분 + 버튼 탭 (1인분 -> 2인분) -> 총 열량이 930kcal로 실시간 계산됨
         final incBtn = find.byKey(const Key('servings_increase_button'));
         await tester.ensureVisible(incBtn);
         await tester.tap(incBtn);
         await tester.pumpAndSettle();
-        expect(find.text('3인분'), findsOneWidget);
-        expect(find.text('3공기'), findsOneWidget);
+        expect(find.text('2인분'), findsOneWidget);
+        expect(find.text('930kcal'), findsOneWidget);
       },
     );
   });

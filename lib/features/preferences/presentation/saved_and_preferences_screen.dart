@@ -7,9 +7,24 @@ import '../../recipe_detail/presentation/recipe_detail_screen.dart';
 import '../../recommendation/domain/recipe.dart';
 import '../domain/user_preferences.dart';
 
-/// 저장한 레시피 다시 보기 및 개인화 설정(알레르기/조리시간/난이도/인분) 화면
+/// 저장한 레시피 보관함 화면
+/// - 피드백 반영:
+///   1. 조리시간, 난이도, 인분 수 설정 제거
+///   2. 알레르기 필터는 메인 화면에서 숨기고 우측 상단 ⚙️ 설정창(모달)을 눌렀을 때만 열리도록 분리
 class SavedAndPreferencesScreen extends ConsumerWidget {
   const SavedAndPreferencesScreen({super.key});
+
+  void _openAllergySettingsModal(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppTheme.surfaceWhite,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => const AllergySettingsBottomSheet(),
+    );
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -23,20 +38,75 @@ class SavedAndPreferencesScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('🔖 저장한 요리 & 맞춤 설정'),
+        title: const Text('🔖 저장한 요리 보관함'),
+        actions: [
+          TextButton.icon(
+            key: const Key('open_settings_modal_button'),
+            onPressed: () => _openAllergySettingsModal(context),
+            icon: const Icon(Icons.settings_outlined, size: 18),
+            label: Text(
+              appState.preferences.allergens.isEmpty
+                  ? '알레르기 설정'
+                  : '알레르기 설정 (${appState.preferences.allergens.length})',
+            ),
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          _buildRecipeSourceGuideCard(),
+          const SizedBox(height: 20),
           _buildBookmarkedRecipesSection(
             context: context,
             bookmarkedRecipes: bookmarkedRecipes,
             recommendations: recommendations,
           ),
-          const SizedBox(height: 24),
-          _buildPreferencesSection(context, ref, appState.preferences),
           const SizedBox(height: 32),
         ],
+      ),
+    );
+  }
+
+  Widget _buildRecipeSourceGuideCard() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Icon(
+                  Icons.public_outlined,
+                  color: AppTheme.primaryGreenDark,
+                  size: 20,
+                ),
+                SizedBox(width: 8),
+                Text(
+                  '카테고리별 글로벌 레시피 출처 안내',
+                  style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w700),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            ...CuisineCategory.values
+                .where((c) => c != CuisineCategory.all)
+                .map((c) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text(
+                  '• ${c.emoji} ${c.label}: ${c.primarySourceSite}',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: AppTheme.textSecondary,
+                  ),
+                ),
+              );
+            }),
+          ],
+        ),
       ),
     );
   }
@@ -105,7 +175,7 @@ class SavedAndPreferencesScreen extends ConsumerWidget {
                   style: const TextStyle(fontWeight: FontWeight.w700),
                 ),
                 subtitle: Text(
-                  '⏱ ${recipe.cookingTimeMinutes}분 · 난이도 ${recipe.difficulty.label}',
+                  '${recipe.category} · 🔥 ${recipe.nutritionPerServing.caloriesKcal}kcal · ⏱ ${recipe.cookingTimeMinutes}분',
                 ),
                 trailing: const Icon(Icons.chevron_right_rounded),
                 onTap: () {
@@ -122,21 +192,35 @@ class SavedAndPreferencesScreen extends ConsumerWidget {
       ],
     );
   }
+}
 
-  Widget _buildPreferencesSection(
-    BuildContext context,
-    WidgetRef ref,
-    UserPreferences prefs,
-  ) {
-    return Card(
+/// 설정창 안으로 숨겨진 알레르기 및 기피 식재료 설정 모달 시트
+class AllergySettingsBottomSheet extends ConsumerWidget {
+  const AllergySettingsBottomSheet({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final prefs = ref.watch(appStateProvider).preferences;
+
+    return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              '개인화 및 알레르기 안전 필터',
-              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  '⚙️ 알레르기 및 제외 식재료 설정',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                ),
+                IconButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close),
+                ),
+              ],
             ),
             const SizedBox(height: 6),
             const Text(
@@ -144,11 +228,6 @@ class SavedAndPreferencesScreen extends ConsumerWidget {
               style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
             ),
             const SizedBox(height: 14),
-            const Text(
-              '알레르기 및 피해야 할 식재료',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 8),
             Wrap(
               spacing: 8,
               runSpacing: 8,
@@ -174,12 +253,12 @@ class SavedAndPreferencesScreen extends ConsumerWidget {
                 );
               }).toList(),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 14),
             Container(
-              padding: const EdgeInsets.all(10),
+              padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: AppTheme.warmWhite,
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: AppTheme.borderSubtle),
               ),
               child: const Text(
@@ -191,83 +270,13 @@ class SavedAndPreferencesScreen extends ConsumerWidget {
                 ),
               ),
             ),
-            const Divider(height: 28),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  '최대 조리 시간',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
-                ),
-                DropdownButton<int>(
-                  value: prefs.maxCookingTimeMinutes,
-                  items: const [15, 30, 45, 60].map((min) {
-                    return DropdownMenuItem(
-                      value: min,
-                      child: Text('$min분 이내'),
-                    );
-                  }).toList(),
-                  onChanged: (val) {
-                    if (val != null) {
-                      ref.read(appStateProvider.notifier).updatePreferences(
-                            prefs.copyWith(maxCookingTimeMinutes: val),
-                          );
-                    }
-                  },
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  '선호 조리 난이도',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
-                ),
-                DropdownButton<RecipeDifficulty>(
-                  value: prefs.preferredDifficulty,
-                  items: RecipeDifficulty.values.map((diff) {
-                    return DropdownMenuItem(
-                      value: diff,
-                      child: Text('${diff.label} 이하'),
-                    );
-                  }).toList(),
-                  onChanged: (val) {
-                    if (val != null) {
-                      ref.read(appStateProvider.notifier).updatePreferences(
-                            prefs.copyWith(preferredDifficulty: val),
-                          );
-                    }
-                  },
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  '기본 조리 인분 수',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
-                ),
-                DropdownButton<int>(
-                  value: prefs.defaultServings,
-                  items: const [1, 2, 3, 4].map((s) {
-                    return DropdownMenuItem(
-                      value: s,
-                      child: Text('$s인분 기준'),
-                    );
-                  }).toList(),
-                  onChanged: (val) {
-                    if (val != null) {
-                      ref.read(appStateProvider.notifier).updatePreferences(
-                            prefs.copyWith(defaultServings: val),
-                          );
-                    }
-                  },
-                ),
-              ],
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('설정 완료'),
+              ),
             ),
           ],
         ),

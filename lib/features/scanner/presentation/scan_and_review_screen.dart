@@ -9,7 +9,7 @@ import '../../pantry/domain/ingredient.dart';
 import '../../pantry/presentation/ingredient_editor_dialog.dart';
 import '../data/ingredient_scanner_service.dart';
 
-/// 카메라/갤러리 촬영, AI 식재료 인식 및 사용자 검수·수정 화면
+/// 카메라 촬영(갤러리 선택 제거), AI 식재료 인식 및 사용자 검수·수정 화면
 class ScanAndReviewScreen extends ConsumerStatefulWidget {
   const ScanAndReviewScreen({super.key});
 
@@ -29,10 +29,10 @@ class _ScanAndReviewScreenState extends ConsumerState<ScanAndReviewScreen> {
   bool _hasCompletedScan = false;
   String _selectedSourceDescription = '';
 
-  Future<void> _pickAndAnalyzeImage(ImageSource source) async {
+  Future<void> _captureWithCamera() async {
     try {
       final XFile? picked = await _picker.pickImage(
-        source: source,
+        source: ImageSource.camera,
         maxWidth: 1024,
         maxHeight: 1024,
         imageQuality: 82,
@@ -42,13 +42,13 @@ class _ScanAndReviewScreenState extends ConsumerState<ScanAndReviewScreen> {
       final bytes = await picked.readAsBytes();
       await _runAiAnalysis(
         imageBytes: bytes,
-        sourceLabel: source == ImageSource.camera ? '카메라 촬영 이미지' : '갤러리 선택 이미지',
+        sourceLabel: '카메라 촬영 이미지',
       );
     } catch (e) {
       setState(() {
         _isAnalyzing = false;
         _errorMessage =
-            '카메라 또는 사진 접근 권한을 확인할 수 없습니다. 기기 설정에서 권한을 허용하거나 아래의 스마트 샘플/수동 입력을 이용해 주세요.';
+            '카메라 접근 권한을 확인할 수 없습니다. 기기 설정에서 카메라 권한을 허용하거나 아래의 스마트 샘플/수동 입력을 이용해 주세요.';
       });
     }
   }
@@ -261,39 +261,27 @@ class _ScanAndReviewScreenState extends ConsumerState<ScanAndReviewScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              '1. 냉장고 또는 식재료 사진 선택',
+              '1. 냉장고 식재료 카메라 촬영',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 6),
             const Text(
-              '카메라로 직접 촬영하거나 갤러리에서 사진을 선택하세요.',
+              '냉장고 내부나 조리대 위 식재료를 카메라로 직접 촬영하면 AI가 식재료를 인식합니다.',
               style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
             ),
             const SizedBox(height: 14),
-            Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton.icon(
-                    key: const Key('scan_camera_button'),
-                    onPressed: () => _pickAndAnalyzeImage(ImageSource.camera),
-                    icon: const Icon(Icons.camera_alt_outlined),
-                    label: const Text('카메라 촬영'),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    key: const Key('scan_gallery_button'),
-                    onPressed: () => _pickAndAnalyzeImage(ImageSource.gallery),
-                    icon: const Icon(Icons.photo_library_outlined),
-                    label: const Text('갤러리 선택'),
-                  ),
-                ),
-              ],
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                key: const Key('scan_camera_button'),
+                onPressed: _captureWithCamera,
+                icon: const Icon(Icons.camera_alt_outlined),
+                label: const Text('카메라로 냉장고 촬영하기'),
+              ),
             ),
             const Divider(height: 28),
             const Text(
-              '빠른 시뮬레이션 / 테스트용 냉장고 사진 샘플',
+              '빠른 시뮬레이션 / 테스트용 냉장고 촬영 샘플',
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
