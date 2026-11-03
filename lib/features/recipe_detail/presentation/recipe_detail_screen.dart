@@ -6,9 +6,10 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/ingredient_normalizer.dart';
 import '../../recommendation/domain/recipe.dart';
 
-/// 레시피 상세 화면 (Figma Food Delivery & JavaGem Coffee Shop 레퍼런스 + baseline-ui 적용)
-/// - 다크 차콜 캡슐형 인분 스테퍼, 고정폭 숫자(tabularFigures)가 적용된 실시간 칼로리/영양소 계산 카드,
-///   필요 재료 체크리스트, 단계별 조리 방법, 식품 안전 주의사항 및 출처 플랫폼 표시
+/// 레시피 상세 화면 (Figma Food Delivery App by Yamesh_SB & JavaGem Coffee Shop 레퍼런스 직관 반영)
+/// - 상단 웜 피치/테라코타 대형 라운드 푸드 쇼케이스 + 플로팅 원형 뒤로가기/북마크 버튼
+/// - ⭐ 활용도 · 🔥 1인분 열량 · ⏱ 조리시간 인라인 메타데이터 바
+/// - 원형 식재료 아이콘 쇼케이스(Food Delivery INGREDIENTS 스타일) + 실시간 인분 조절/영양소 계산
 class RecipeDetailScreen extends ConsumerStatefulWidget {
   final RecommendedRecipe recommendedRecipe;
 
@@ -48,188 +49,270 @@ class _RecipeDetailScreenState extends ConsumerState<RecipeDetailScreen> {
     };
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(recipe.title),
-        actions: [
-          IconButton(
-            key: const Key('bookmark_toggle_button'),
-            tooltip: isBookmarked ? '저장 취소' : '레시피 저장',
-            onPressed: () {
-              ref.read(appStateProvider.notifier).toggleBookmark(recipe.id);
-            },
-            icon: Icon(
-              isBookmarked ? Icons.bookmark : Icons.bookmark_border,
-              color:
-                  isBookmarked ? AppTheme.terracotta : AppTheme.textPrimary,
+      backgroundColor: AppTheme.surfaceWhite,
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(18, 12, 18, 28),
+          children: [
+            // 1. Food Delivery App 레퍼런스: 상단 라운드 웜 피치 비주얼 배너 + 플로팅 원형 버튼
+            _buildFoodDeliveryVisualHero(
+              context: context,
+              recipe: recipe,
+              isBookmarked: isBookmarked,
+            ),
+            const SizedBox(height: 18),
+            // 2. 타이틀, 출처 레스토랑/플랫폼 태그, 부제 및 ⭐·🔥·⏱ 메타데이터 바
+            _buildFoodDeliveryTitleAndMeta(recipe),
+            const SizedBox(height: 18),
+            // 3. 칼로리 및 영양 성분 계산 카드 (인분 연동)
+            _buildNutritionSummaryCard(recipe),
+            if (widget.recommendedRecipe.hasUncertainQuantities) ...[
+              const SizedBox(height: 12),
+              _buildUncertainQuantityNotice(),
+            ],
+            const SizedBox(height: 18),
+            // 4. Food Delivery 스타일 원형 재료 아이콘 + 인분 스테퍼 및 분량 리스트
+            _buildServingsAndIngredientsCard(recipe, ownedCanonicalNames),
+            if (recipe.safetyWarnings.isNotEmpty) ...[
+              const SizedBox(height: 18),
+              _buildSafetyWarningsCard(recipe.safetyWarnings),
+            ],
+            const SizedBox(height: 18),
+            _buildCookingStepsSection(recipe),
+            const SizedBox(height: 16),
+            _buildSourceFooter(recipe),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Figma Food Delivery App 상단 웜 오렌지/피치 라운드 쇼케이스 박스 + 플로팅 원형 버튼
+  Widget _buildFoodDeliveryVisualHero({
+    required BuildContext context,
+    required Recipe recipe,
+    required bool isBookmarked,
+  }) {
+    final isNow =
+        widget.recommendedRecipe.tier == RecommendationTier.canMakeNow;
+
+    return Container(
+      height: 210,
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: const Color(0xFFFBE7D8),
+        borderRadius: BorderRadius.circular(28),
+      ),
+      child: Stack(
+        children: [
+          // 중앙 대형 요리 아이콘 쇼케이스
+          Center(
+            child: Container(
+              width: 118,
+              height: 118,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.75),
+                shape: BoxShape.circle,
+              ),
+              child: Text(
+                recipe.emoji,
+                style: const TextStyle(fontSize: 64),
+              ),
             ),
           ),
-          const SizedBox(width: 8),
-        ],
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          _buildHeaderCard(recipe),
-          const SizedBox(height: 16),
-          _buildNutritionSummaryCard(recipe),
-          if (widget.recommendedRecipe.hasUncertainQuantities) ...[
-            const SizedBox(height: 12),
-            _buildUncertainQuantityNotice(),
-          ],
-          const SizedBox(height: 16),
-          _buildServingsAndIngredientsCard(recipe, ownedCanonicalNames),
-          if (recipe.safetyWarnings.isNotEmpty) ...[
-            const SizedBox(height: 16),
-            _buildSafetyWarningsCard(recipe.safetyWarnings),
-          ],
-          const SizedBox(height: 16),
-          _buildCookingStepsSection(recipe),
-          const SizedBox(height: 16),
-          _buildSourceFooter(recipe),
-          const SizedBox(height: 28),
+          // 좌상단 플로팅 원형 뒤로가기 버튼
+          Positioned(
+            top: 14,
+            left: 14,
+            child: Material(
+              color: Colors.white,
+              shape: const CircleBorder(),
+              child: IconButton(
+                tooltip: '뒤로가기',
+                onPressed: () => Navigator.of(context).pop(),
+                icon: const Icon(
+                  Icons.chevron_left_rounded,
+                  color: AppTheme.textPrimary,
+                ),
+              ),
+            ),
+          ),
+          // 우상단 플로팅 원형 북마크(하트/북마크) 버튼
+          Positioned(
+            top: 14,
+            right: 14,
+            child: Material(
+              color: Colors.white,
+              shape: const CircleBorder(),
+              child: IconButton(
+                key: const Key('bookmark_toggle_button'),
+                tooltip: isBookmarked ? '저장 취소' : '레시피 저장',
+                onPressed: () {
+                  ref.read(appStateProvider.notifier).toggleBookmark(recipe.id);
+                },
+                icon: Icon(
+                  isBookmarked
+                      ? Icons.favorite_rounded
+                      : Icons.favorite_border_rounded,
+                  color: isBookmarked
+                      ? const Color(0xFFFF6B35)
+                      : AppTheme.textPrimary,
+                ),
+              ),
+            ),
+          ),
+          // 좌하단 조리 가능 상태 캡슐 배지
+          Positioned(
+            bottom: 14,
+            left: 16,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: isNow
+                    ? AppTheme.primaryGreen
+                    : AppTheme.espressoCharcoal,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                widget.recommendedRecipe.tier.label,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildHeaderCard(Recipe recipe) {
-    final isNow =
-        widget.recommendedRecipe.tier == RecommendationTier.canMakeNow;
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 64,
-                  height: 64,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: AppTheme.terracottaLight,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    recipe.emoji,
-                    style: const TextStyle(fontSize: 34),
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 4,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: isNow
-                                  ? AppTheme.primaryGreenLight
-                                  : AppTheme.accentAmberLight,
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: Text(
-                              widget.recommendedRecipe.tier.label,
-                              style: TextStyle(
-                                fontSize: 11.5,
-                                fontWeight: FontWeight.w800,
-                                color: isNow
-                                    ? AppTheme.primaryGreenDark
-                                    : AppTheme.accentAmberDark,
-                              ),
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AppTheme.terracottaLight,
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: Text(
-                              recipe.category,
-                              style: const TextStyle(
-                                fontSize: 11.5,
-                                fontWeight: FontWeight.w800,
-                                color: AppTheme.terracottaDark,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        recipe.title,
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -0.4,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(
-              recipe.subtitle,
-              style: const TextStyle(
-                fontSize: 14,
-                color: AppTheme.textSecondary,
-                height: 1.4,
+  /// Food Delivery App의 타이틀 + 레스토랑/출처 칩 + ⭐ 100% · 🔥 kcal · ⏱ 20 min 인라인 바
+  Widget _buildFoodDeliveryTitleAndMeta(Recipe recipe) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // 카테고리 및 레시피 출처 캡슐 (Food Delivery의 'Uttora Coffe House' 배지 스타일)
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: AppTheme.warmWhite,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: AppTheme.borderSubtle),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.restaurant_rounded,
+                size: 15,
+                color: AppTheme.terracotta,
               ),
-            ),
-            const SizedBox(height: 14),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _buildInfoBadge(
-                  Icons.schedule_outlined,
-                  '예상 ${recipe.cookingTimeMinutes}분',
-                ),
-                _buildInfoBadge(
-                  Icons.local_fire_department_outlined,
-                  '1인분 ${recipe.nutritionPerServing.caloriesKcal}kcal',
-                ),
-                _buildInfoBadge(
-                  Icons.kitchen_outlined,
-                  '보유 재료 활용도 ${widget.recommendedRecipe.utilizationPercentage}%',
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppTheme.warmWhite,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: AppTheme.borderSubtle),
-              ),
-              child: Text(
-                '💡 추천 이유: ${widget.recommendedRecipe.recommendationReason}',
+              const SizedBox(width: 6),
+              Text(
+                '${recipe.category} · ${recipe.sourceName}',
                 style: const TextStyle(
-                  fontSize: 13,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w700,
                   color: AppTheme.textPrimary,
-                  height: 1.42,
                 ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
+        Text(
+          recipe.title,
+          style: const TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.w800,
+            color: AppTheme.textPrimary,
+            letterSpacing: -0.4,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          recipe.subtitle,
+          style: const TextStyle(
+            fontSize: 14,
+            color: AppTheme.textSecondary,
+            height: 1.45,
+          ),
+        ),
+        const SizedBox(height: 14),
+        // Food Delivery 레퍼런스의 ⭐ 4.7   🚚 Free   ⏱ 20 min 인라인 아이콘 행
+        Row(
+          children: [
+            const Icon(
+              Icons.star_border_rounded,
+              color: Color(0xFFFF7622),
+              size: 20,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              '재료 활용도 ${widget.recommendedRecipe.utilizationPercentage}%',
+              style: const TextStyle(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w800,
+                color: AppTheme.textPrimary,
+                fontFeatures: AppTheme.tabularFigures,
+              ),
+            ),
+            const SizedBox(width: 18),
+            const Icon(
+              Icons.local_fire_department_outlined,
+              color: Color(0xFFFF7622),
+              size: 20,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              '1인분 ${recipe.nutritionPerServing.caloriesKcal} kcal',
+              style: const TextStyle(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w700,
+                color: AppTheme.textPrimary,
+                fontFeatures: AppTheme.tabularFigures,
+              ),
+            ),
+            const SizedBox(width: 18),
+            const Icon(
+              Icons.schedule_rounded,
+              color: Color(0xFFFF7622),
+              size: 20,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              '${recipe.cookingTimeMinutes}분',
+              style: const TextStyle(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w700,
+                color: AppTheme.textPrimary,
+                fontFeatures: AppTheme.tabularFigures,
               ),
             ),
           ],
         ),
-      ),
+        const SizedBox(height: 12),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: AppTheme.warmWhite,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppTheme.borderSubtle),
+          ),
+          child: Text(
+            '💡 추천 이유: ${widget.recommendedRecipe.recommendationReason}',
+            style: const TextStyle(
+              fontSize: 13,
+              color: AppTheme.textPrimary,
+              height: 1.42,
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -240,8 +323,9 @@ class _RecipeDetailScreenState extends ConsumerState<RecipeDetailScreen> {
 
     return Card(
       key: const Key('nutrition_summary_card'),
+      color: AppTheme.warmWhite,
       child: Padding(
-        padding: const EdgeInsets.all(18),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -268,7 +352,7 @@ class _RecipeDetailScreenState extends ConsumerState<RecipeDetailScreen> {
                   ],
                 ),
                 Text(
-                  '$_currentServings인분 기준 (1인분 ${perServing.caloriesKcal}kcal)',
+                  '기준: $_currentServings인분 조리 시',
                   style: const TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
@@ -278,7 +362,7 @@ class _RecipeDetailScreenState extends ConsumerState<RecipeDetailScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 12),
             Row(
               children: [
                 Expanded(
@@ -311,7 +395,7 @@ class _RecipeDetailScreenState extends ConsumerState<RecipeDetailScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             Text(
               '• 예상 나트륨: ${totalScaled.sodiumMg}mg (조리 시 사용하는 양념의 양에 따라 달라질 수 있습니다)',
               style: const TextStyle(
@@ -334,7 +418,7 @@ class _RecipeDetailScreenState extends ConsumerState<RecipeDetailScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 6),
       decoration: BoxDecoration(
-        color: highlight ? AppTheme.terracottaLight : AppTheme.warmWhite,
+        color: highlight ? AppTheme.terracottaLight : AppTheme.surfaceWhite,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: highlight ? AppTheme.terracotta : AppTheme.borderSubtle,
@@ -359,33 +443,6 @@ class _RecipeDetailScreenState extends ConsumerState<RecipeDetailScreen> {
               fontWeight: FontWeight.w800,
               fontFeatures: AppTheme.tabularFigures,
               color: highlight ? AppTheme.terracottaDark : AppTheme.textPrimary,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInfoBadge(IconData icon, String text) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: AppTheme.warmWhite,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: AppTheme.borderSubtle),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 15, color: AppTheme.terracottaDark),
-          const SizedBox(width: 5),
-          Text(
-            text,
-            style: const TextStyle(
-              fontSize: 12.5,
-              fontWeight: FontWeight.w700,
-              color: AppTheme.textPrimary,
-              fontFeatures: AppTheme.tabularFigures,
             ),
           ),
         ],
@@ -420,7 +477,7 @@ class _RecipeDetailScreenState extends ConsumerState<RecipeDetailScreen> {
     );
   }
 
-  /// Food Delivery 레퍼런스의 다크 차콜 캡슐 스테퍼(- 1인분 +) 및 재료 체크리스트
+  /// Food Delivery 레퍼런스의 원형 식재료 아이콘 바 + 다크 차콜 캡슐 스테퍼(- 1인분 +) 및 재료 체크리스트
   Widget _buildServingsAndIngredientsCard(
     Recipe recipe,
     Set<String> ownedCanonicalNames,
@@ -435,12 +492,17 @@ class _RecipeDetailScreenState extends ConsumerState<RecipeDetailScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text(
-                  '필요한 재료와 분량',
-                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+                  'INGREDIENTS · 필요한 재료',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.2,
+                  ),
                 ),
+                // Food Delivery 레퍼런스 하단 바의 다크 차콜 캡슐형 `- 2 +` 스테퍼
                 Container(
                   decoration: BoxDecoration(
-                    color: AppTheme.espressoCharcoal,
+                    color: const Color(0xFF181C2E),
                     borderRadius: BorderRadius.circular(999),
                   ),
                   child: Row(
@@ -485,6 +547,54 @@ class _RecipeDetailScreenState extends ConsumerState<RecipeDetailScreen> {
                   ),
                 ),
               ],
+            ),
+            const SizedBox(height: 14),
+            // Food Delivery 레퍼런스의 원형 피치 아이콘 리스트
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: recipe.coreIngredients.map((req) {
+                  final canonical = IngredientNormalizer.normalizeName(req.name);
+                  final cat = IngredientNormalizer.inferCategory(canonical);
+                  final isOwned = ownedCanonicalNames.contains(canonical);
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 12),
+                    child: Column(
+                      children: [
+                        Container(
+                          width: 50,
+                          height: 50,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: isOwned
+                                ? const Color(0xFFFBE7D8)
+                                : AppTheme.warmWhite,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: isOwned
+                                  ? AppTheme.terracotta
+                                  : AppTheme.borderSubtle,
+                            ),
+                          ),
+                          child: Text(
+                            cat.emoji,
+                            style: const TextStyle(fontSize: 22),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          req.name,
+                          style: const TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w700,
+                            color: AppTheme.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              ),
             ),
             const Divider(height: 24),
             ...recipe.ingredients.map((req) {
@@ -632,7 +742,7 @@ class _RecipeDetailScreenState extends ConsumerState<RecipeDetailScreen> {
                       height: 28,
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
-                        color: AppTheme.espressoCharcoal,
+                        color: AppTheme.terracotta,
                         borderRadius: BorderRadius.circular(9),
                       ),
                       child: Text(
@@ -696,7 +806,7 @@ class _RecipeDetailScreenState extends ConsumerState<RecipeDetailScreen> {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppTheme.surfaceWhite,
+        color: AppTheme.warmWhite,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppTheme.borderSubtle),
       ),

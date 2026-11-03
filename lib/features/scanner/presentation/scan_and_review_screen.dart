@@ -9,8 +9,7 @@ import '../../pantry/domain/ingredient.dart';
 import '../../pantry/presentation/ingredient_editor_dialog.dart';
 import '../data/ingredient_scanner_service.dart';
 
-/// 카메라 촬영(갤러리 선택 제거), AI 식재료 인식 및 사용자 검수·수정 화면
-/// - JavaGem Coffee Shop & Food Delivery UI 레퍼런스 + baseline-ui 적용
+/// 카메라 촬영(갤러리 선택 제거), 4구역 정밀 AI 식재료 인식(Spatial Vision + 한글 포장지 OCR) 및 사용자 검수·수정 화면
 class ScanAndReviewScreen extends ConsumerStatefulWidget {
   const ScanAndReviewScreen({super.key});
 
@@ -24,26 +23,31 @@ class _ScanAndReviewScreenState extends ConsumerState<ScanAndReviewScreen> {
 
   bool _isAnalyzing = false;
   String? _errorMessage;
+  bool _errorRequiresApiKey = false;
   String? _analysisSummary;
+  List<String> _scannedZones = const [];
   List<String> _excludedItems = const [];
   List<Ingredient> _draftIngredients = const [];
   bool _hasCompletedScan = false;
   String _selectedSourceDescription = '';
+  Uint8List? _lastCapturedBytes;
 
   Future<void> _captureWithCamera() async {
     try {
+      // 냉장고 안쪽 작은 식재료와 한글 포장지 라벨(OCR) 인식률을 높이기 위해 1920px / 92% 고해상도 촬영 적용
       final XFile? picked = await _picker.pickImage(
         source: ImageSource.camera,
-        maxWidth: 1024,
-        maxHeight: 1024,
-        imageQuality: 82,
+        maxWidth: 1920,
+        maxHeight: 1920,
+        imageQuality: 92,
       );
       if (picked == null) return;
 
       final bytes = await picked.readAsBytes();
+      _lastCapturedBytes = bytes;
       await _runAiAnalysis(
         imageBytes: bytes,
-        sourceLabel: '카메라 촬영 이미지',
+        sourceLabel: '카메라 촬영 이미지 (4구역 비전 + 한글 OCR)',
       );
     } catch (e) {
       setState(() {
@@ -51,6 +55,86 @@ class _ScanAndReviewScreenState extends ConsumerState<ScanAndReviewScreen> {
         _errorMessage =
             '카메라 접근 권한을 확인할 수 없습니다. 기기 설정에서 카메라 권한을 허용하거나 아래의 스마트 샘플/수동 입력을 이용해 주세요.';
       });
+    }
+  }
+
+  Future<void> _openApiKeyConfigDialog() async {
+    final currentKey = ref.read(appStateProvider).customGeminiApiKey;
+    final controller = TextEditingController(text: currentKey);
+
+    final savedKey = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.surfaceWhite,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.key_rounded, color: AppTheme.terracottaDark),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'AI 비전 인식 키 설정 (Gemini 2.5)',
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              '실제 카메라로 촬영한 냉장고 사진을 4구역 공간 분할 + 한글 포장지 OCR로 정밀 분석하려면 Google AI Studio의 Gemini API 키를 입력해 주세요.',
+              style: TextStyle(
+                fontSize: 13,
+                color: AppTheme.textSecondary,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              obscureText: false,
+              decoration: const InputDecoration(
+                labelText: 'Gemini API Key (AIza...)',
+                hintText: 'AIzaSy...',
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              '• 입력된 키는 기기 내부(SharedPreferences)에만 안전하게 저장됩니다.',
+              style: TextStyle(fontSize: 11.5, color: AppTheme.textMuted),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('취소'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.terracotta,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
+            child: const Text('저장 및 적용'),
+          ),
+        ],
+      ),
+    );
+
+    if (savedKey != null) {
+      ref.read(appStateProvider.notifier).setCustomGeminiApiKey(savedKey);
+      // 방금 촬영해 둔 사진이 있다면 키 저장 즉시 재분석 실행!
+      if (_lastCapturedBytes != null &&
+          _lastCapturedBytes!.isNotEmpty &&
+          savedKey.isNotEmpty) {
+        await _runAiAnalysis(
+          imageBytes: _lastCapturedBytes!,
+          sourceLabel: '카메라 촬영 이미지 (4구역 비전 + 한글 OCR)',
+        );
+      }
     }
   }
 
@@ -62,6 +146,7 @@ class _ScanAndReviewScreenState extends ConsumerState<ScanAndReviewScreen> {
     setState(() {
       _isAnalyzing = true;
       _errorMessage = null;
+      _errorRequiresApiKey = false;
       _selectedSourceDescription = sourceLabel;
     });
 
@@ -77,6 +162,7 @@ class _ScanAndReviewScreenState extends ConsumerState<ScanAndReviewScreen> {
         _isAnalyzing = false;
         _hasCompletedScan = true;
         _analysisSummary = result.analysisSummary;
+        _scannedZones = result.scannedZones;
         _excludedItems = result.excludedNonFoodItems;
         _draftIngredients = result.recognizedIngredients;
       });
@@ -85,6 +171,7 @@ class _ScanAndReviewScreenState extends ConsumerState<ScanAndReviewScreen> {
       setState(() {
         _isAnalyzing = false;
         _errorMessage = e.message;
+        _errorRequiresApiKey = e.requiresApiKey;
       });
     } catch (_) {
       if (!mounted) return;
@@ -158,12 +245,36 @@ class _ScanAndReviewScreenState extends ConsumerState<ScanAndReviewScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final scanner = ref.watch(scannerServiceProvider);
+    final hasLiveKey = scanner.hasLiveApiKey;
     final uncertainItems =
         _draftIngredients.where((e) => e.needsConfirmation).toList();
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('AI 냉장고 식재료 스캔'),
+        actions: [
+          TextButton.icon(
+            key: const Key('open_api_key_dialog_button'),
+            style: TextButton.styleFrom(
+              foregroundColor:
+                  hasLiveKey ? AppTheme.primaryGreenDark : AppTheme.terracottaDark,
+            ),
+            onPressed: _openApiKeyConfigDialog,
+            icon: Icon(
+              hasLiveKey ? Icons.verified_rounded : Icons.key_rounded,
+              size: 18,
+            ),
+            label: Text(
+              hasLiveKey ? '실사진 AI 활성' : '🔑 AI 키 설정',
+              style: const TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
       body: SafeArea(
         child: _isAnalyzing
@@ -171,7 +282,7 @@ class _ScanAndReviewScreenState extends ConsumerState<ScanAndReviewScreen> {
             : ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
-                  _buildPrivacyNoticeBanner(),
+                  _buildVisionAccuracyGuideCard(hasLiveKey),
                   const SizedBox(height: 16),
                   _buildCaptureSourceSection(),
                   if (_errorMessage != null) ...[
@@ -227,33 +338,61 @@ class _ScanAndReviewScreenState extends ConsumerState<ScanAndReviewScreen> {
     );
   }
 
-  Widget _buildPrivacyNoticeBanner() {
+  /// 4구역 공간 분할 비전 + 한글 포장지 OCR 안내 배너
+  Widget _buildVisionAccuracyGuideCard(bool hasLiveKey) {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppTheme.terracottaLight,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: AppTheme.terracotta.withValues(alpha: 0.35),
-        ),
+        color: const Color(0xFF1C1917),
+        borderRadius: BorderRadius.circular(18),
       ),
-      child: const Row(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            Icons.verified_user_outlined,
-            color: AppTheme.terracottaDark,
-            size: 20,
-          ),
-          SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              '안심 사진 분석 안내: 촬영된 사진은 용량을 압축하여 식재료 인식에만 일시 사용되며 서버에 영구 저장되지 않습니다. 사진만으로 알 수 없는 수량·유통기한은 임의로 생성하지 않습니다.',
-              style: TextStyle(
-                fontSize: 12.5,
-                color: AppTheme.textPrimary,
-                height: 1.4,
+          Row(
+            children: [
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: hasLiveKey
+                      ? AppTheme.primaryGreen
+                      : AppTheme.terracotta,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  hasLiveKey
+                      ? '4구역 공간비전 + 한글 OCR 활성'
+                      : 'AI 비전 엔진 안내',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
               ),
+              const Spacer(),
+              if (!hasLiveKey)
+                InkWell(
+                  onTap: _openApiKeyConfigDialog,
+                  child: const Text(
+                    '실사진 분석 키 등록하기 →',
+                    style: TextStyle(
+                      color: AppTheme.terracotta,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            '• 인식률 2배 높이는 팁: 냉장고의 ①상단 ②중단 ③채소실 ④문짝 포켓이 잘 보이게 찍고, 두부·우유·어묵·소스류는 한글 라벨이 보이도록 촬영하면 OCR이 브랜드명을 자동 정제하여 정확히 인식합니다.',
+            style: TextStyle(
+              fontSize: 12,
+              color: Color(0xFFE7E5E4),
+              height: 1.42,
             ),
           ),
         ],
@@ -274,7 +413,7 @@ class _ScanAndReviewScreenState extends ConsumerState<ScanAndReviewScreen> {
             ),
             const SizedBox(height: 6),
             const Text(
-              '냉장고 내부나 조리대 위 식재료를 카메라로 직접 촬영하면 AI가 식재료를 인식합니다.',
+              '냉장고 내부나 조리대 위 식재료를 카메라로 직접 촬영하면 4구역 분할 비전 + 한글 OCR이 식재료를 탐지합니다.',
               style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
             ),
             const SizedBox(height: 14),
@@ -291,7 +430,7 @@ class _ScanAndReviewScreenState extends ConsumerState<ScanAndReviewScreen> {
                   Icons.camera_alt_outlined,
                   color: AppTheme.terracotta,
                 ),
-                label: const Text('카메라로 냉장고 촬영하기'),
+                label: const Text('카메라로 냉장고 촬영하기 (고해상도 OCR)'),
               ),
             ),
             const Divider(height: 28),
@@ -365,7 +504,7 @@ class _ScanAndReviewScreenState extends ConsumerState<ScanAndReviewScreen> {
             ),
             const SizedBox(height: 8),
             const Text(
-              'AI가 식재료 이름을 한국어로 표준화하고\n반찬통·비닐 등 비식품을 제외하고 있어요.',
+              '1) 상단·중단·채소실·도어포켓 4구역 공간 스캔 중\n2) 포장지 한글 라벨 OCR 판독 및 브랜드명 정제 중\n3) 반찬통·비닐 등 비식품 자동 제외 중',
               textAlign: TextAlign.center,
               style: TextStyle(color: AppTheme.textSecondary, height: 1.5),
             ),
@@ -387,14 +526,16 @@ class _ScanAndReviewScreenState extends ConsumerState<ScanAndReviewScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
             children: [
-              Icon(Icons.error_outline, color: AppTheme.dangerRed),
-              SizedBox(width: 8),
+              const Icon(Icons.error_outline, color: AppTheme.dangerRed),
+              const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'AI 식재료 인식에 실패했어요',
-                  style: TextStyle(
+                  _errorRequiresApiKey
+                      ? '실제 카메라 사진 분석을 위해 AI 키 설정이 필요합니다'
+                      : 'AI 식재료 인식에 실패했어요',
+                  style: const TextStyle(
                     fontWeight: FontWeight.w800,
                     fontSize: 15,
                     color: AppTheme.dangerRed,
@@ -409,8 +550,20 @@ class _ScanAndReviewScreenState extends ConsumerState<ScanAndReviewScreen> {
             style: const TextStyle(fontSize: 13.5, color: AppTheme.textPrimary),
           ),
           const SizedBox(height: 14),
-          Row(
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
             children: [
+              if (_errorRequiresApiKey)
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.terracotta,
+                    foregroundColor: Colors.white,
+                  ),
+                  onPressed: _openApiKeyConfigDialog,
+                  icon: const Icon(Icons.key_rounded, size: 18),
+                  label: const Text('Gemini API 키 입력하기'),
+                ),
               OutlinedButton.icon(
                 key: const Key('retry_scan_button'),
                 onPressed: () => _runAiAnalysis(
@@ -419,9 +572,8 @@ class _ScanAndReviewScreenState extends ConsumerState<ScanAndReviewScreen> {
                   demoPresetKey: 'typical_fridge',
                 ),
                 icon: const Icon(Icons.refresh, size: 18),
-                label: const Text('다시 시도'),
+                label: const Text('샘플로 다시 시도'),
               ),
-              const SizedBox(width: 10),
               ElevatedButton.icon(
                 key: const Key('manual_fallback_button'),
                 onPressed: _addManualDraftItem,
@@ -461,7 +613,7 @@ class _ScanAndReviewScreenState extends ConsumerState<ScanAndReviewScreen> {
         ),
         if (_analysisSummary != null)
           Padding(
-            padding: const EdgeInsets.only(bottom: 10),
+            padding: const EdgeInsets.only(bottom: 8),
             child: Text(
               _analysisSummary!,
               style: const TextStyle(
@@ -469,6 +621,36 @@ class _ScanAndReviewScreenState extends ConsumerState<ScanAndReviewScreen> {
                 color: AppTheme.textSecondary,
                 fontFeatures: AppTheme.tabularFigures,
               ),
+            ),
+          ),
+        if (_scannedZones.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: _scannedZones
+                  .map(
+                    (zone) => Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppTheme.terracottaLight,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        '📍 스캔 구역: $zone',
+                        style: const TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w700,
+                          color: AppTheme.terracottaDark,
+                        ),
+                      ),
+                    ),
+                  )
+                  .toList(),
             ),
           ),
         if (_excludedItems.isNotEmpty)

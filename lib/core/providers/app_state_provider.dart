@@ -10,7 +10,7 @@ import '../../features/recommendation/domain/recipe.dart';
 import '../../features/recommendation/domain/recipe_recommendation_engine.dart';
 import '../../features/scanner/data/ingredient_scanner_service.dart';
 
-/// 로컬 저장소 및 전체 앱 상태(내 냉장고 재료, 기본 양념, 알레르기 설정, 카테고리/메인 재료 필터, 저장한 레시피) 통합 모델
+/// 로컬 저장소 및 전체 앱 상태(내 냉장고 재료, 기본 양념, 알레르기 설정, 카테고리/메인 재료 필터, 저장한 레시피, AI API 키) 통합 모델
 class AppDataState {
   final List<Ingredient> pantryIngredients;
   final Set<String> ownedSeasonings;
@@ -18,6 +18,7 @@ class AppDataState {
   final CuisineCategory selectedCategory;
   final String? selectedMainIngredient;
   final Set<String> bookmarkedRecipeIds;
+  final String customGeminiApiKey;
   final bool isInitialized;
 
   const AppDataState({
@@ -27,6 +28,7 @@ class AppDataState {
     this.selectedCategory = CuisineCategory.all,
     this.selectedMainIngredient,
     required this.bookmarkedRecipeIds,
+    this.customGeminiApiKey = '',
     this.isInitialized = false,
   });
 
@@ -76,6 +78,7 @@ class AppDataState {
       selectedCategory: CuisineCategory.all,
       selectedMainIngredient: null,
       bookmarkedRecipeIds: const {},
+      customGeminiApiKey: '',
       isInitialized: false,
     );
   }
@@ -88,6 +91,7 @@ class AppDataState {
     String? selectedMainIngredient,
     bool clearMainIngredient = false,
     Set<String>? bookmarkedRecipeIds,
+    String? customGeminiApiKey,
     bool? isInitialized,
   }) {
     return AppDataState(
@@ -99,6 +103,7 @@ class AppDataState {
           ? null
           : (selectedMainIngredient ?? this.selectedMainIngredient),
       bookmarkedRecipeIds: bookmarkedRecipeIds ?? this.bookmarkedRecipeIds,
+      customGeminiApiKey: customGeminiApiKey ?? this.customGeminiApiKey,
       isInitialized: isInitialized ?? this.isInitialized,
     );
   }
@@ -110,6 +115,7 @@ class AppStateNotifier extends Notifier<AppDataState> {
   static const _kSeasoningsKey = 'fridge_chef_seasonings_v1';
   static const _kPreferencesKey = 'fridge_chef_preferences_v1';
   static const _kBookmarksKey = 'fridge_chef_bookmarks_v1';
+  static const _kGeminiApiKey = 'fridge_chef_gemini_api_key_v1';
 
   @override
   AppDataState build() {
@@ -150,11 +156,14 @@ class AppStateNotifier extends Notifier<AppDataState> {
         loadedBookmarks = bookmarksList.toSet();
       }
 
+      final loadedApiKey = prefs.getString(_kGeminiApiKey) ?? '';
+
       state = state.copyWith(
         pantryIngredients: loadedIngredients,
         ownedSeasonings: loadedSeasonings,
         preferences: loadedPrefs,
         bookmarkedRecipeIds: loadedBookmarks,
+        customGeminiApiKey: loadedApiKey,
         isInitialized: true,
       );
     } catch (_) {
@@ -181,9 +190,16 @@ class AppStateNotifier extends Notifier<AppDataState> {
         _kBookmarksKey,
         state.bookmarkedRecipeIds.toList(),
       );
+      await prefs.setString(_kGeminiApiKey, state.customGeminiApiKey);
     } catch (_) {
       // 테스트 환경이나 스토리지 접근 실패 시 인메모리 상태는 유지
     }
+  }
+
+  /// 앱 내 Gemini API 키 설정 저장
+  void setCustomGeminiApiKey(String apiKey) {
+    state = state.copyWith(customGeminiApiKey: apiKey.trim());
+    _saveToStorage();
   }
 
   /// 식재료 단건 추가 또는 병합
@@ -226,9 +242,8 @@ class AppStateNotifier extends Notifier<AppDataState> {
     List<Ingredient> verifiedItems, {
     bool replaceExisting = false,
   }) {
-    final cleanedItems = verifiedItems
-        .map((e) => e.copyWith(isVerified: true))
-        .toList();
+    final cleanedItems =
+        verifiedItems.map((e) => e.copyWith(isVerified: true)).toList();
 
     final combined = replaceExisting
         ? cleanedItems
@@ -244,8 +259,7 @@ class AppStateNotifier extends Notifier<AppDataState> {
   void removeIngredient(String id) {
     final removedItem =
         state.pantryIngredients.where((e) => e.id == id).firstOrNull;
-    final nextList =
-        state.pantryIngredients.where((e) => e.id != id).toList();
+    final nextList = state.pantryIngredients.where((e) => e.id != id).toList();
     final shouldClearMain = removedItem != null &&
         state.selectedMainIngredient == removedItem.name;
 
@@ -316,7 +330,10 @@ final appStateProvider = NotifierProvider<AppStateNotifier, AppDataState>(
 );
 
 final scannerServiceProvider = Provider<IngredientScannerService>((ref) {
-  return GeminiIngredientScannerService();
+  final customKey = ref.watch(
+    appStateProvider.select((s) => s.customGeminiApiKey),
+  );
+  return GeminiIngredientScannerService(runtimeApiKey: customKey);
 });
 
 final allRecipesProvider = Provider<List<Recipe>>((ref) {
