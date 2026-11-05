@@ -245,14 +245,20 @@ class GeminiIngredientScannerService implements IngredientScannerService {
     );
   }
 
+  /// 최신 Gemini 3.x 모델부터 순차 폴백(404 방지): 신규 API 키는 gemini-2.5-flash 접근이 제한되어 404가 발생하므로 최신 모델을 우선 호출합니다.
+  static const List<String> _candidateModels = [
+    'gemini-3.8-flash',
+    'gemini-3.6-flash',
+    'gemini-3.5-flash-lite',
+    'gemini-3-flash-preview',
+    'gemini-2.5-flash',
+  ];
+
   /// 4구역 공간 분할(4-Zone Spatial Grid) + 한글 포장지 OCR + Structured Schema 호출
   Future<ScanAnalysisResult> _callGeminiSpatialOcrVisionApi({
     required Uint8List imageBytes,
     required String mimeType,
   }) async {
-    final uri = Uri.parse(
-      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$_effectiveApiKey',
-    );
 
     const systemPrompt = '''
 당신은 한국 가정집 냉장고 및 주방 식재료 정밀 비전(Vision) + 한글 OCR 판독 전문 AI입니다.
@@ -318,32 +324,48 @@ class GeminiIngredientScannerService implements IngredientScannerService {
 
     try {
       final client = httpClient ?? http.Client();
-      final response = await client
-          .post(
-            uri,
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({
-              'contents': [
-                {
-                  'parts': [
-                    {'text': systemPrompt},
-                    {
-                      'inline_data': {
-                        'mime_type': mimeType,
-                        'data': base64Encode(imageBytes),
+      http.Response? response;
+
+      for (final modelName in _candidateModels) {
+        final uri = Uri.parse(
+          'https://generativelanguage.googleapis.com/v1beta/models/$modelName:generateContent?key=$_effectiveApiKey',
+        );
+        response = await client
+            .post(
+              uri,
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({
+                'contents': [
+                  {
+                    'parts': [
+                      {'text': systemPrompt},
+                      {
+                        'inline_data': {
+                          'mime_type': mimeType,
+                          'data': base64Encode(imageBytes),
+                        },
                       },
-                    },
-                  ],
+                    ],
+                  },
+                ],
+                'generationConfig': {
+                  'responseMimeType': 'application/json',
+                  'responseSchema': responseSchema,
+                  'temperature': 0.15,
                 },
-              ],
-              'generationConfig': {
-                'responseMimeType': 'application/json',
-                'responseSchema': responseSchema,
-                'temperature': 0.15,
-              },
-            }),
-          )
-          .timeout(const Duration(seconds: 25));
+              }),
+            )
+            .timeout(const Duration(seconds: 25));
+
+        // 404(해당 키에서 구버전/특정 모델 미지원)인 경우 다음 최신 모델로 즉시 자동 전환
+        if (response.statusCode != 404) {
+          break;
+        }
+      }
+
+      if (response == null) {
+        throw const ScannerException('AI 모델을 호출할 수 없습니다.');
+      }
 
       if (response.statusCode == 400 || response.statusCode == 403) {
         throw const ScannerException(
