@@ -1,0 +1,15 @@
+{
+  "name": "냉장고 셰프 AI",
+  "description": "냉장고 사진 한 장으로 끝내는 AI 식재료 인식, 맞춤 요리 추천 및 인분 연동 영양 분석",
+  "version": "1.0.0",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "permissions": [],
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

@@ -1,42 +1,41 @@
 # 냉장고 셰프 AI (Fridge Chef AI)
 
-냉장고 사진을 찍거나 갤러리에서 선택하면 AI가 식재료를 인식하고, 보유한 재료와 기본 양념을 바탕으로 **지금 바로 만들 수 있는 요리**와 **조금만 추가하면 가능한 요리**를 추천해 주는 Flutter 모바일 앱입니다.
+냉장고 사진을 찍으면 AI(4구역 공간 분할 비전 + 한글 포장지 OCR)가 식재료를 자동 인식하고, 보유한 재료와 기본 양념을 바탕으로 **지금 바로 만들 수 있는 요리**와 **조금만 추가하면 가능한 요리**를 추천해 주는 웹 애플리케이션입니다.
 
-## 주요 문서
-- [PROJECT_BRIEF.md](./PROJECT_BRIEF.md) — 제품 목표 및 핵심 요구사항
-- [ARCHITECTURE.md](./ARCHITECTURE.md) — 기술 스택, 폴더 구조 및 데이터 흐름
-- [DECISIONS.md](./DECISIONS.md) — 주요 설계 및 기술 의사결정 기록
-- [ROADMAP.md](./ROADMAP.md) — 단계별 개발 계획 및 진행 현황
-- [TEST_PLAN.md](./TEST_PLAN.md) — 단위/위젯/통합 테스트 및 MVP 완료 기준
+## 핵심 기능
 
-## 개발 환경 및 실행 방법
+1. **4구역 AI 비전 + 한글 포장지 OCR 스캐너**:
+   - 상단/중단/채소실/도어포켓 4구역 공간 분할 스캔
+   - 한글 라벨 OCR 및 브랜드명 정제
+   - 반찬통, 비닐 등 비식품 자동 필터링
+   - 불확실 항목(보통/확인 필요) 검수 및 수동 추가 지원
+2. **맞춤 요리 추천 엔진**:
+   - 글로벌 5개 카테고리 필터 (한식, 양식, 일식, 중식, 동남아)
+   - 🎯 주인공(메인) 재료 우선 추천 필터
+   - '지금 바로 가능' vs '조금만 추가' 분류
+   - 엄격한 알레르기 및 기피 식재료 안전 필터링
+3. **인분 연동 실시간 영양 계산 & 상세 레시피**:
+   - 1~10인분 실시간 분량 및 영양소(열량, 탄·단·지·나트륨) 재계산
+   - 단계별 조리 가이드, 초보자 팁, 타이머, 대체 식재료 제안
+   - 생고기/해산물/계란 등 식품 안전 가이드라인 제공
+4. **오프라인 로컬 저장 & 북마크**:
+   - `localStorage`를 통한 무서버 오프라인 영속성
 
-### 1. 필수 SDK
-- Flutter SDK (Stable 3.x 이상)
-- Android SDK / Android CLI (Android 빌드 및 실행용)
-- Xcode (macOS에서 iOS 빌드 및 시뮬레이터 실행 시 필요)
+## 기술 스택
+- **Framework**: React 19 + TypeScript
+- **Build Tool**: Vite
+- **Styling**: Tailwind CSS v4
+- **Icons**: Lucide React
+- **AI Vision**: Google Gemini 2.5 Flash Vision & OCR
 
-### 2. 의존성 설치 및 실행
+## 실행 방법
 ```bash
-# 패키지 설치
-flutter pub get
+# 의존성 설치
+npm install
 
-# 정적 분석 실행
-dart analyze lib test
+# 개발 서버 실행 (포트 3000)
+npm run dev
 
-# 전체 테스트 실행 (단위 테스트 + E2E 위젯 플로우 테스트 9종)
-flutter test
-
-# 앱 실행 (기본 모드 / 스마트 데모 AI 포함)
-flutter run
-
-# 실제 Gemini API 키를 런타임 주입하여 실행할 경우 (코드에 키를 저장하지 않음)
-flutter run --dart-define=GEMINI_API_KEY=your_api_key_here
-
-# Android APK 빌드
-flutter build apk --debug
+# 프로덕션 빌드
+npm run build
 ```
-
-### 3. iOS 빌드 환경 안내 (macOS)
-- Android 우선 출시 기준 MVP가 완성되어 있으며, 동일한 코드베이스(`lib/`)로 iOS를 즉시 지원합니다.
-- iOS 시뮬레이터 실행 또는 IPA 빌드를 진행할 때는 macOS App Store에서 정식 **Xcode.app** 및 **CocoaPods**(`brew install cocoapods`)를 설치한 후 `flutter build ios`를 실행하세요.
